@@ -1,0 +1,57 @@
+# Node / JS
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm
+.yarn
+.yarn-integrity
+.env
+.env.local
+.env.*.local
+
+# TypeScript
+*.tsbuildinfo
+.tscache/
+
+# uFBT / Flipper build artifacts
+.ufbt/
+dist/
+build/
+*.fap
+*.elf
+*.bin
+*.dfu
+*.map
+*.d
+*.o
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS
+*.bak
+*.tmp
+*.orig
+
+# Python (uFBT uses Python)
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Local secrets / keys
+*.pem
+*.key
+secrets/

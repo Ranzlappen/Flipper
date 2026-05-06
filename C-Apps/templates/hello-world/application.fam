@@ -1,0 +1,19 @@
+# Flipper Application Manifest (FAM) for the "hello_world" template.
+#
+# This is the file uFBT reads to know how to build, name, and package your
+# .fap. Keep `appid` lowercase + snake_case - it doubles as the .fap filename.
+
+App(
+    appid="hello_world",
+    name="Hello World",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="hello_world_app",
+    requires=["gui"],
+    stack_size=1 * 1024,
+    fap_category="Examples",
+    fap_author="Momentum App Framework",
+    fap_version="1.0",
+    fap_description="Minimal C app skeleton built with uFBT for Momentum firmware.",
+    fap_icon_assets="images",
+    fap_weburl="https://github.com/Next-Flip/Momentum-Firmware",
+)

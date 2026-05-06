@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "node",
+    "lib": ["ES2020"],
+    "strict": true,
+    "noImplicitAny": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["@next-flip/fz-sdk-mntm"],
+    "typeRoots": ["./node_modules/@types", "./node_modules/@next-flip"],
+    "baseUrl": ".",
+    "paths": {
+      "@flipperdevices/*": ["./node_modules/@next-flip/fz-sdk-mntm/*"]
+    }
+  },
+  "include": ["templates/**/*.js", "examples/**/*.js", "src/**/*.js", "src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "build"]
+}

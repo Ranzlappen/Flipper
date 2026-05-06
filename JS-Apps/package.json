@@ -1,0 +1,35 @@
+{
+  "name": "momentum-js-apps",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JavaScript apps and scripts for Flipper Zero running Momentum firmware",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "validate": "node ./scripts/validate.mjs",
+    "format": "prettier --write \"**/*.{js,ts,json,md}\"",
+    "build": "echo 'Flipper JS scripts do not need a build step. Just copy the .js file to /ext/apps/Scripts/ on the SD card.'"
+  },
+  "keywords": [
+    "flipper-zero",
+    "flipperzero",
+    "momentum",
+    "momentum-firmware",
+    "javascript",
+    "subghz",
+    "remote"
+  ],
+  "author": "Momentum App Framework Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@next-flip/fz-sdk-mntm": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "prettier": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

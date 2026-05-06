@@ -1,0 +1,144 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create tags + releases
+
+jobs:
+  build:
+    name: Build .fap apps + bundle JS scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can find existing tags
+
+      # ----------------------------------------------------------------------
+      # 1. Set up Python + uFBT, bootstrap against Momentum SDK
+      # ----------------------------------------------------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uFBT
+        run: pip install --upgrade ufbt
+
+      - name: Bootstrap uFBT for Momentum
+        run: |
+          ufbt update \
+            --index-url=https://up.momentum-fw.dev/firmware/directory.json \
+            --channel=release
+
+      # ----------------------------------------------------------------------
+      # 2. Discover & build every C app (anything with an application.fam)
+      # ----------------------------------------------------------------------
+      - name: Build all C apps
+        id: build
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/fap
+
+          mapfile -t fams < <(find C-Apps -type f -name 'application.fam' | sort)
+          if [ "${#fams[@]}" -eq 0 ]; then
+            echo "No C apps found - skipping uFBT build."
+          fi
+
+          for fam in "${fams[@]}"; do
+            appdir="$(dirname "$fam")"
+            echo "::group::Building $appdir"
+            (cd "$appdir" && ufbt)
+            # uFBT writes outputs into <appdir>/dist/
+            if compgen -G "$appdir/dist/*.fap" > /dev/null; then
+              cp "$appdir"/dist/*.fap artifacts/fap/
+            else
+              echo "WARNING: no .fap produced for $appdir"
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "Built $(ls artifacts/fap | wc -l) .fap files"
+
+      # ----------------------------------------------------------------------
+      # 3. Collect JS scripts (templates + examples)
+      # ----------------------------------------------------------------------
+      - name: Collect JS scripts
+        run: |
+          mkdir -p artifacts/js
+          if [ -d JS-Apps/templates ]; then cp -v JS-Apps/templates/*.js artifacts/js/ 2>/dev/null || true; fi
+          if [ -d JS-Apps/examples  ]; then cp -v JS-Apps/examples/*.js  artifacts/js/ 2>/dev/null || true; fi
+          ls -la artifacts/js || true
+
+      # ----------------------------------------------------------------------
+      # 4. Build a single zip bundle for easy phone download
+      # ----------------------------------------------------------------------
+      - name: Create release bundle zip
+        run: |
+          cd artifacts
+          zip -r momentum-app-framework-bundle.zip fap js
+          ls -la
+
+      # ----------------------------------------------------------------------
+      # 5. Compute next semver tag (v0.1.0 -> v0.1.1 -> ...)
+      # ----------------------------------------------------------------------
+      - name: Compute next version tag
+        id: version
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          # Find the latest existing semver tag of the form vX.Y.Z
+          last_tag="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n1 || true)"
+          if [ -z "$last_tag" ]; then
+            next="v0.1.0"
+          else
+            ver="${last_tag#v}"
+            IFS=. read -r major minor patch <<EOF
+$ver
+EOF
+            patch=$((patch + 1))
+            next="v${major}.${minor}.${patch}"
+          fi
+          echo "Last tag: ${last_tag:-<none>}"
+          echo "Next tag: $next"
+          echo "tag=$next"      >> "$GITHUB_OUTPUT"
+          echo "previous=$last_tag" >> "$GITHUB_OUTPUT"
+
+      # ----------------------------------------------------------------------
+      # 6. Tag the commit and create the GitHub Release
+      # ----------------------------------------------------------------------
+      - name: Create tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Automated release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:  ${{ steps.version.outputs.tag }}
+          name:     "Momentum App Framework ${{ steps.version.outputs.tag }}"
+          body: |
+            Automated release built from commit `${{ github.sha }}`.
+
+            ## How to install
+            1. **`.fap` apps** - download any `*.fap` below and copy to `/ext/apps/Examples/` on your Flipper SD card.
+            2. **`.js` scripts** - download any `*.js` below and copy to `/ext/apps/Scripts/`.
+            3. Or grab the all-in-one `momentum-app-framework-bundle.zip`.
+
+            Both work on Flipper Zero running [Momentum firmware](https://momentum-fw.dev).
+          files: |
+            artifacts/fap/*.fap
+            artifacts/js/*.js
+            artifacts/momentum-app-framework-bundle.zip
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
