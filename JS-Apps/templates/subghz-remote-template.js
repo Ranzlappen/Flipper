@@ -1,80 +1,73 @@
 // =============================================================================
 //  Momentum App Framework  -  subghz-remote-template.js
 // -----------------------------------------------------------------------------
-//  A reusable multi-button Sub-GHz remote.
-//  - Shows a submenu of buttons (e.g. UP / STOP / DOWN).
+//  Generic multi-button Sub-GHz remote.
+//  - Shows a submenu of buttons.
 //  - When a button is pressed, transmits the matching .sub file from /ext/subghz/.
-//  - Loops back to the menu after each transmission.
+//  - Returns to the menu after each transmission. BACK exits.
 //
 //  HOW TO ADAPT
 //  ------------
-//  1. Record your remote signals on the Flipper:
-//        Sub-GHz -> Read -> press your physical remote button -> Save
-//     Save them to /ext/subghz/ with descriptive names, e.g.:
-//        garage_open.sub, garage_close.sub, garage_stop.sub
-//  2. Edit the BUTTONS array below: change `label` and `file` to match.
-//  3. Save this file as `<your_remote>.js` in /ext/apps/Scripts/.
+//  1. Record your signals: Sub-GHz -> Read -> press your physical remote
+//     button -> Save with a memorable name (e.g. garage_open).
+//  2. Edit the BUTTONS array below.
+//  3. Save as <your_remote>.js into /ext/apps/Scripts/.
 //  4. Run from Apps -> Scripts.
 //
 //  REQUIRES: Momentum firmware (uses the Momentum-enhanced `subghz` module).
+//  No closures: the JS engine is mJS - state passes via subscribe() args.
 // =============================================================================
 
-let subghz   = require("subghz");
-let submenu  = require("gui/submenu");
-let dialog   = require("gui/dialog");
-let notify   = require("notification");
 let eventLoop = require("event_loop");
+let gui       = require("gui");
+let submenu   = require("gui/submenu");
+let subghz    = require("subghz");
+let notify    = require("notification");
 
-// ---- CONFIG: edit these to match YOUR .sub files ---------------------------
-let TITLE    = "My Sub-GHz Remote";
-let HEADER   = "Pick a button";
+// ---- CONFIG: edit these to match YOUR .sub files ----------------------------
+let TITLE   = "My Sub-GHz Remote";
+let HEADER  = "Pick a button";
 
 let BUTTONS = [
     { label: "UP",   file: "/ext/subghz/garage_open.sub"  },
     { label: "STOP", file: "/ext/subghz/garage_stop.sub"  },
     { label: "DOWN", file: "/ext/subghz/garage_close.sub" },
 ];
-// ---------------------------------------------------------------------------
 
-// Build the submenu view.
-let view = submenu.makeView({
-    header: HEADER,
-    items:  BUTTONS.map(function (b) { return b.label; }),
-});
+// How many times each press retransmits. Most remotes need 1.
+let REPEAT = 1;
+// -----------------------------------------------------------------------------
 
-// Transmit one .sub file and notify on success/failure.
-function sendFile(path) {
-    print("TX:", path);
-    try {
-        subghz.transmitFile(path);   // Momentum: transmits the recorded file
-        notify.success();
-        showInfo("Sent", path);
-    } catch (e) {
-        notify.error();
-        showInfo("Failed", String(e));
-    }
-}
+let labels = [];
+for (let i = 0; i < BUTTONS.length; i++) labels.push(BUTTONS[i].label);
 
-// Tiny modal info dialog.
-function showInfo(title, text) {
-    dialog.message({
-        header:  title,
-        text:    text,
-        center:  "OK",
-    });
-}
+let view = submenu.makeWith({ header: HEADER }, labels);
 
-// Wire up: when an item is selected, send the matching file.
-eventLoop.subscribe(view.chosen, function (_sub, index) {
-    sendFile(BUTTONS[index].file);
-});
+eventLoop.subscribe(
+    view.chosen,
+    function (_sub, index, buttons, repeat) {
+        let i = /** @type {number} */ (index);
+        let file = buttons[i].file;
+        print("TX:", file);
+        try {
+            subghz.transmitFile(file, repeat);
+            notify.success();
+        } catch (e) {
+            print("TX failed:", e);
+            notify.error();
+        }
+    },
+    BUTTONS,
+    REPEAT,
+);
 
-// Show the menu, run the loop until BACK is pressed.
-eventLoop.subscribe(view.exit, function () {
-    eventLoop.stop();
-});
+eventLoop.subscribe(
+    gui.viewDispatcher.navigation,
+    function (_sub, _item, loop) { loop.stop(); },
+    eventLoop,
+);
 
-submenu.setHeader(view, TITLE);
-eventLoop.run(view);
-
+gui.viewDispatcher.switchTo(view);
+print(TITLE + " ready.");
+eventLoop.run();
 print("Remote exited cleanly.");
