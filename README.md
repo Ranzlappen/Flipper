@@ -1,5 +1,7 @@
 # Momentum App Framework
 
+[![Build & Release](https://github.com/Ranzlappen/Flipper/actions/workflows/build-and-release.yml/badge.svg?branch=main)](https://github.com/Ranzlappen/Flipper/actions/workflows/build-and-release.yml)
+
 A complete, beginner-friendly starter repository for building **JavaScript scripts** and **C-language `.fap` apps** for the Flipper Zero running [**Momentum Firmware**](https://github.com/Next-Flip/Momentum-Firmware).
 
 > **Phone-only friendly!** You can develop, edit, and deploy JavaScript scripts using only your phone + the Flipper Mobile App. C apps need a computer (or GitHub Codespaces).
