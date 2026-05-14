@@ -15,6 +15,7 @@ typedef enum {
     UrButtonLeft,
     UrButtonRight,
     UrButtonOk,
+    UrButtonBack,
     UrButtonCount,
 } UrButton;
 
@@ -39,6 +40,14 @@ typedef struct {
 // returns it parsed.
 UrConfig* ur_config_load(void);
 void ur_config_free(UrConfig* cfg);
+
+// Serialize the current bindings to config.txt. Overwrites whatever was there
+// (including hand-written comments). Returns true on success.
+bool ur_config_save(const UrConfig* cfg);
+
+// Replace all bindings in `dst` with a fresh copy of `src`'s. Used by the
+// editor to discard pending changes by reloading from disk.
+void ur_config_copy(UrConfig* dst, const UrConfig* src);
 
 // "UP" → UrButtonUp, etc. Returns -1 on miss.
 int ur_button_from_name(const char* name);
