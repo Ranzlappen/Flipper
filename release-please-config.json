@@ -20,7 +20,7 @@
   "packages": {
     ".": {
       "package-name": "momentum-app-framework",
-      "extra-labels": ["automerge"]
+      "extra-label": "automerge"
     }
   }
 }
