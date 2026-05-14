@@ -17,6 +17,7 @@
     { "type": "refactor", "section": "Refactoring", "hidden": true },
     { "type": "test", "section": "Tests", "hidden": true }
   ],
+  "extra-labels": ["automerge"],
   "packages": {
     ".": {
       "package-name": "momentum-app-framework"
