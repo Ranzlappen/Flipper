@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6](https://github.com/Ranzlappen/Flipper/compare/v0.1.5...v0.1.6) (2026-05-14)
+
+
+### Bug Fixes
+
+* **ci:** add stable-named "Build required" gate for branch protection ([69c559a](https://github.com/Ranzlappen/Flipper/commit/69c559a9eddb8bab5ff19912262e3ee61b64b812))
+* **ci:** move extra-labels into per-package release-please config ([ea1b135](https://github.com/Ranzlappen/Flipper/commit/ea1b135a3d9f01444028d7e38986b37d3f2be08f))
+
 ## [0.1.5](https://github.com/Ranzlappen/Flipper/compare/v0.1.4...v0.1.5) (2026-05-14)
 
 
