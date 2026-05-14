@@ -1,0 +1,21 @@
+# Code ownership. Listed owners are auto-requested for review and required
+# by branch protection (when enabled in repo settings).
+#
+# Syntax: <path-glob>  <@user>...
+
+# Default owner: everything not matched by a more specific rule below.
+*                                       @Ranzlappen
+
+# CI / release machinery — high blast radius, keep tight.
+/.github/                               @Ranzlappen
+/release-please-config.json             @Ranzlappen
+/.release-please-manifest.json          @Ranzlappen
+/.momentum-sdk-version                  @Ranzlappen
+/CHANGELOG.md                           @Ranzlappen
+
+# Validation scripts — touch carefully, they gate every PR.
+/JS-Apps/scripts/                       @Ranzlappen
+
+# Claude Code config.
+/CLAUDE.md                              @Ranzlappen
+/.claude/                               @Ranzlappen

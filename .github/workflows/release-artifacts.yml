@@ -1,0 +1,103 @@
+name: Release artifacts
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach artifacts to (e.g. v0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-artifacts-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build .fap apps + bundle JS scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Read pinned Momentum SDK
+        id: sdk
+        run: |
+          set -a; . ./.momentum-sdk-version; set +a
+          echo "channel=${UFBT_CHANNEL}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache uFBT SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.ufbt
+          key: ufbt-${{ runner.os }}-${{ steps.sdk.outputs.channel }}-${{ hashFiles('.momentum-sdk-version') }}
+
+      - name: Install uFBT
+        run: pip install --upgrade ufbt
+
+      - name: Bootstrap uFBT for Momentum
+        run: |
+          ufbt update \
+            --index-url=https://up.momentum-fw.dev/firmware/directory.json \
+            --channel=${{ steps.sdk.outputs.channel }}
+
+      - name: Build all C apps
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/fap
+
+          mapfile -t fams < <(find C-Apps -type f -name 'application.fam' \
+            -not -path 'C-Apps/templates/*' | sort)
+          if [ "${#fams[@]}" -eq 0 ]; then
+            echo "No non-template C apps found - skipping uFBT build."
+          fi
+
+          for fam in "${fams[@]}"; do
+            appdir="$(dirname "$fam")"
+            echo "::group::Building $appdir"
+            (cd "$appdir" && ufbt)
+            if compgen -G "$appdir/dist/*.fap" > /dev/null; then
+              cp "$appdir"/dist/*.fap artifacts/fap/
+            else
+              echo "WARNING: no .fap produced for $appdir"
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "Built $(ls artifacts/fap 2>/dev/null | wc -l) .fap files"
+
+      - name: Collect JS scripts
+        run: |
+          mkdir -p artifacts/js
+          if [ -d JS-Apps/templates ]; then cp -v JS-Apps/templates/*.js artifacts/js/ 2>/dev/null || true; fi
+          if [ -d JS-Apps/examples  ]; then cp -v JS-Apps/examples/*.js  artifacts/js/ 2>/dev/null || true; fi
+          ls -la artifacts/js || true
+
+      - name: Create release bundle zip
+        run: |
+          cd artifacts
+          zip -r momentum-app-framework-bundle.zip fap js
+          ls -la
+
+      - name: Attach artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
+          files: |
+            artifacts/fap/*.fap
+            artifacts/js/*.js
+            artifacts/momentum-app-framework-bundle.zip
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

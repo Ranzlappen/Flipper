@@ -1,0 +1,11 @@
+# Pinned Momentum firmware SDK version used by CI (uFBT --channel) and the
+# JS SDK npm package (@next-flip/fz-sdk-mntm).
+#
+# Updated automatically by .github/workflows/momentum-sync.yml. Do not edit
+# by hand unless you also bump the matching version in JS-Apps/package.json.
+#
+# Format: KEY=VALUE, one per line. UFBT_CHANNEL pins the firmware build
+# channel (release | dev | rc | <commit-sha>). JS_SDK pins the npm package
+# version.
+UFBT_CHANNEL=release
+JS_SDK=1.0.0

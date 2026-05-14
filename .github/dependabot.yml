@@ -1,0 +1,45 @@
+version: 2
+updates:
+  # JS toolchain (prettier, typescript). Momentum SDK itself is excluded —
+  # momentum-sync.yml handles that on its own cadence and against the pinned
+  # version, so we don't want Dependabot fighting it.
+  - package-ecosystem: npm
+    directory: /JS-Apps
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - area:js
+    groups:
+      js-dev-deps:
+        dependency-type: development
+    ignore:
+      - dependency-name: "@next-flip/fz-sdk-mntm"
+    commit-message:
+      prefix: deps
+      include: scope
+
+  # GitHub Actions versions. Keep these current — they're the substrate every
+  # workflow runs on.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - area:ci
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
+      include: scope

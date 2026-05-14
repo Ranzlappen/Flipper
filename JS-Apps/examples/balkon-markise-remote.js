@@ -32,11 +32,11 @@
 // =============================================================================
 
 let eventLoop = require("event_loop");
-let gui       = require("gui");
-let submenu   = require("gui/submenu");
-let subghz    = require("subghz");
-let notify    = require("notification");
-let storage   = require("storage");
+let gui = require("gui");
+let submenu = require("gui/submenu");
+let subghz = require("subghz");
+let notify = require("notification");
+let storage = require("storage");
 
 // ---------------------------------------------------------------------------
 // CONFIG  -  the three buttons and the .sub files they transmit
@@ -44,9 +44,9 @@ let storage   = require("storage");
 let TITLE = "Balkon Markise";
 
 let BUTTONS = [
-    { label: "REIN  (in)",   file: "/ext/subghz/Balkon_markise_rein.sub"  },
-    { label: "STOP",         file: "/ext/subghz/Balkon_markise_stop.sub"  },
-    { label: "RAUS  (out)",  file: "/ext/subghz/Balkon_markise_raus.sub"  },
+  { label: "REIN  (in)", file: "/ext/subghz/Balkon_markise_rein.sub" },
+  { label: "STOP", file: "/ext/subghz/Balkon_markise_stop.sub" },
+  { label: "RAUS  (out)", file: "/ext/subghz/Balkon_markise_raus.sub" },
 ];
 
 // How many times each press should retransmit the captured signal. Most
@@ -58,66 +58,68 @@ let REPEAT = 1;
 // Pre-flight: make sure every .sub file exists, otherwise show an error.
 // ---------------------------------------------------------------------------
 function findMissingFiles() {
-    let missing = [];
-    for (let i = 0; i < BUTTONS.length; i++) {
-        if (!storage.fileExists(BUTTONS[i].file)) {
-            missing.push(BUTTONS[i].file);
-        }
+  let missing = [];
+  for (let i = 0; i < BUTTONS.length; i++) {
+    if (!storage.fileExists(BUTTONS[i].file)) {
+      missing.push(BUTTONS[i].file);
     }
-    return missing;
+  }
+  return missing;
 }
 
 let missing = findMissingFiles();
 if (missing.length > 0) {
-    // No SD files yet - print to log so the user sees what to record.
-    print("Missing .sub files - please record:");
-    for (let i = 0; i < missing.length; i++) print("  -", missing[i]);
-    print("Tip: Sub-GHz -> Read -> Save with the expected filename.");
+  // No SD files yet - print to log so the user sees what to record.
+  print("Missing .sub files - please record:");
+  for (let i = 0; i < missing.length; i++) print("  -", missing[i]);
+  print("Tip: Sub-GHz -> Read -> Save with the expected filename.");
 } else {
-    // ---------------------------------------------------------------------------
-    // Build the submenu view. Items are passed as the second positional arg
-    // (they are "children" in the ViewFactory model).
-    // ---------------------------------------------------------------------------
-    let labels = [];
-    for (let i = 0; i < BUTTONS.length; i++) labels.push(BUTTONS[i].label);
+  // ---------------------------------------------------------------------------
+  // Build the submenu view. Items are passed as the second positional arg
+  // (they are "children" in the ViewFactory model).
+  // ---------------------------------------------------------------------------
+  let labels = [];
+  for (let i = 0; i < BUTTONS.length; i++) labels.push(BUTTONS[i].label);
 
-    let view = submenu.makeWith({ header: TITLE }, labels);
+  let view = submenu.makeWith({ header: TITLE }, labels);
 
-    // -----------------------------------------------------------------------
-    // When an item is chosen, transmit the matching file. State (BUTTONS,
-    // REPEAT) is passed as subscribe extras because mJS has no closures.
-    // The callback may return a tuple to update those extras between events;
-    // returning undefined keeps them unchanged.
-    // -----------------------------------------------------------------------
-    eventLoop.subscribe(
-        view.chosen,
-        function (_sub, index, buttons, repeat) {
-            let i = /** @type {number} */ (index);
-            let file = buttons[i].file;
-            print("TX:", file);
-            try {
-                subghz.transmitFile(file, repeat);
-                notify.success();
-            } catch (e) {
-                print("TX failed:", e);
-                notify.error();
-            }
-            // return nothing -> keep buttons/repeat for next press
-        },
-        BUTTONS,
-        REPEAT,
-    );
+  // -----------------------------------------------------------------------
+  // When an item is chosen, transmit the matching file. State (BUTTONS,
+  // REPEAT) is passed as subscribe extras because mJS has no closures.
+  // The callback may return a tuple to update those extras between events;
+  // returning undefined keeps them unchanged.
+  // -----------------------------------------------------------------------
+  eventLoop.subscribe(
+    view.chosen,
+    function (_sub, index, buttons, repeat) {
+      let i = /** @type {number} */ (index);
+      let file = buttons[i].file;
+      print("TX:", file);
+      try {
+        subghz.transmitFile(file, repeat);
+        notify.success();
+      } catch (e) {
+        print("TX failed:", e);
+        notify.error();
+      }
+      // return nothing -> keep buttons/repeat for next press
+    },
+    BUTTONS,
+    REPEAT,
+  );
 
-    // BACK key -> exit the app.
-    eventLoop.subscribe(
-        gui.viewDispatcher.navigation,
-        function (_sub, _item, loop) { loop.stop(); },
-        eventLoop,
-    );
+  // BACK key -> exit the app.
+  eventLoop.subscribe(
+    gui.viewDispatcher.navigation,
+    function (_sub, _item, loop) {
+      loop.stop();
+    },
+    eventLoop,
+  );
 
-    // Show the view, then start the event loop. `run()` blocks until stop().
-    gui.viewDispatcher.switchTo(view);
-    eventLoop.run();
+  // Show the view, then start the event loop. `run()` blocks until stop().
+  gui.viewDispatcher.switchTo(view);
+  eventLoop.run();
 
-    print("Balkon-Markise remote closed.");
+  print("Balkon-Markise remote closed.");
 }

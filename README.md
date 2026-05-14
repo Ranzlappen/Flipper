@@ -1,6 +1,7 @@
 # Momentum App Framework
 
-[![Build & Release](https://github.com/Ranzlappen/Flipper/actions/workflows/build-and-release.yml/badge.svg?branch=main)](https://github.com/Ranzlappen/Flipper/actions/workflows/build-and-release.yml)
+[![CI](https://github.com/Ranzlappen/Flipper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Ranzlappen/Flipper/actions/workflows/ci.yml)
+[![Release-Please](https://github.com/Ranzlappen/Flipper/actions/workflows/release-please.yml/badge.svg?branch=main)](https://github.com/Ranzlappen/Flipper/actions/workflows/release-please.yml)
 
 A complete, beginner-friendly starter repository for building **JavaScript scripts** and **C-language `.fap` apps** for the Flipper Zero running [**Momentum Firmware**](https://github.com/Next-Flip/Momentum-Firmware).
 
@@ -134,7 +135,10 @@ momentum-app-framework/
 │   ├── JS-API-Reference.md
 │   └── deployment.md
 └── .github/workflows/
-    └── build-and-release.yml       <- CI: build all .fap + release
+    ├── ci.yml                      <- PR sanity gate: prettier, typecheck, validate, build
+    ├── release-please.yml          <- Conventional-commit driven version + CHANGELOG PR
+    ├── release-artifacts.yml       <- Builds & attaches .fap/.js on release published
+    └── momentum-sync.yml           <- Weekly Momentum SDK upgrade PR
 ```
 
 ---

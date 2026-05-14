@@ -1,0 +1,41 @@
+name: C .fap app submission
+description: You wrote a native C app you'd like included in the framework.
+labels: ["submission", "area:c", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        C apps live under `C-Apps/<your-app-name>/` with an `application.fam`
+        manifest. `npm run validate` checks that `appid` matches the folder
+        name (kebab/snake equivalent) and that `entry_point` resolves to a
+        function in one of the `.c` files.
+  - type: input
+    id: appid
+    attributes:
+      label: appid
+      placeholder: e.g. fancy_remote (snake_case, becomes the .fap filename)
+    validations:
+      required: true
+  - type: input
+    id: category
+    attributes:
+      label: fap_category
+      placeholder: e.g. Tools, GPIO, Sub-GHz, NFC, Misc, …
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What does the app do?
+    validations:
+      required: true
+  - type: input
+    id: tested-on
+    attributes:
+      label: Tested on Momentum firmware version
+    validations:
+      required: true
+  - type: input
+    id: pr
+    attributes:
+      label: Linked PR (once opened)

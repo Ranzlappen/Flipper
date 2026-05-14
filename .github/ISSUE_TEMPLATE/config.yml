@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Momentum Firmware support
+    url: https://momentum-fw.dev
+    about: Firmware-level issues (Sub-GHz, NFC, BadUSB hardware) belong upstream, not here.
+  - name: Discussions
+    url: https://github.com/Ranzlappen/Flipper/discussions
+    about: Questions, ideas, and "how do I…" — start a discussion instead of an issue.
