@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/Ranzlappen/Flipper/compare/v0.1.1...v0.1.2) (2026-05-14)
+
+
+### Dependencies
+
+* **deps-dev:** bump typescript to 6.0.3 and silence new deprecations ([acb9e92](https://github.com/Ranzlappen/Flipper/commit/acb9e926d80f776f179d730c0e01392924911555))
+
 ## [0.1.1](https://github.com/Ranzlappen/Flipper/compare/v0.1.0...v0.1.1) (2026-05-14)
 
 
