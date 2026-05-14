@@ -64,8 +64,15 @@ either.
 Apply to `main`:
 
 - Require a pull request before merging
-- Require approvals: 1
-- Require review from Code Owners
+- **Do not require approvals** (set to `0` or uncheck).
+- **Do not require review from Code Owners.** This is a *separate*
+  sub-toggle and traps you even if "Require approvals" is off: our
+  `.github/CODEOWNERS` maps `* @Ranzlappen`, so every release PR
+  auto-requests Ranzlappen's review, and release-please-bot can't
+  satisfy that with the default `GITHUB_TOKEN`. Leaving either of these
+  two gates on stalls the entire release pipeline indefinitely. CI is
+  the real correctness gate; reviews are theatre when you're the sole
+  approver of your own bot-generated PRs.
 - Require status checks to pass before merging:
   - `CI / JS sanity`
   - `CI / Discover C apps`
@@ -76,6 +83,27 @@ Apply to `main`:
 
 Don't enable "require signed commits" — release-please and dependabot don't
 sign and you'll get stuck.
+
+### If you ever take on contributors
+
+Re-enable "Require approvals: 1" **and** "Require review from Code Owners",
+then add a PAT-based auto-approve workflow for release-please-bot PRs
+(the bot still can't approve itself). Standard pattern: a Personal
+Access Token stored as `RELEASE_PLEASE_PAT` repo secret, used by a
+workflow that posts an approving review on PRs from `github-actions[bot]`
+with title matching `chore(main): release …`. That restores both
+human-review gating and bot release auto-merge.
+
+## Settings → General → Pull Requests
+
+Also configure:
+
+- **Allow auto-merge**: ON. Without this, `peter-evans/enable-pull-request-automerge`
+  cannot enable merge gating and the `automerge` label has no effect.
+- **Allow squash merging**: ON. Squash is the default merge method used by
+  the `automerge.yml` workflow and recommended by `CONTRIBUTING.md`.
+- **Always suggest updating pull request branches**: ON (optional, helps
+  keep PR branches current relative to main).
 
 ## Adding a new JS script
 
