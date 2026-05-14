@@ -1,0 +1,99 @@
+name: Momentum SDK sync
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: momentum-sync
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check for new Momentum SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read currently pinned versions
+        id: pinned
+        run: |
+          set -a; . ./.momentum-sdk-version; set +a
+          echo "channel=${UFBT_CHANNEL}" >> "$GITHUB_OUTPUT"
+          echo "js_sdk=${JS_SDK}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve latest npm SDK version
+        id: npm
+        run: |
+          latest=$(npm view @next-flip/fz-sdk-mntm version)
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "Latest @next-flip/fz-sdk-mntm: $latest"
+
+      - name: Resolve latest Momentum firmware channel SHA
+        id: fw
+        run: |
+          # The Momentum directory.json contains the per-channel build metadata.
+          # We don't need to parse fully — we record a hash of the response so
+          # any change opens a PR for human review.
+          curl -fsSL https://up.momentum-fw.dev/firmware/directory.json -o directory.json
+          sha=$(sha256sum directory.json | cut -d' ' -f1)
+          echo "directory_sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether to open a PR
+        id: decide
+        run: |
+          changed=0
+          if [ "${{ steps.pinned.outputs.js_sdk }}" != "${{ steps.npm.outputs.latest }}" ]; then
+            changed=1
+          fi
+          if ! grep -q "${{ steps.fw.outputs.directory_sha }}" .momentum-sdk-version 2>/dev/null; then
+            changed=1
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Update pinned versions
+        if: steps.decide.outputs.changed == '1'
+        run: |
+          set -euo pipefail
+          new_js="${{ steps.npm.outputs.latest }}"
+          new_sha="${{ steps.fw.outputs.directory_sha }}"
+          # Rewrite .momentum-sdk-version
+          tmp=$(mktemp)
+          awk -v js="$new_js" -v sha="$new_sha" '
+            BEGIN { seen_sha=0 }
+            /^JS_SDK=/      { print "JS_SDK=" js; next }
+            /^FW_INDEX_SHA=/ { print "FW_INDEX_SHA=" sha; seen_sha=1; next }
+                            { print }
+            END { if (!seen_sha) print "FW_INDEX_SHA=" sha }
+          ' .momentum-sdk-version > "$tmp"
+          mv "$tmp" .momentum-sdk-version
+          # Update package.json + lockfile
+          cd JS-Apps
+          npm pkg set "dependencies.@next-flip/fz-sdk-mntm=$new_js"
+          npm install --package-lock-only
+
+      - name: Open PR
+        if: steps.decide.outputs.changed == '1'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: momentum-sync/auto
+          delete-branch: true
+          commit-message: "chore(deps): bump Momentum SDK to ${{ steps.npm.outputs.latest }}"
+          title: "chore(deps): bump Momentum SDK to ${{ steps.npm.outputs.latest }}"
+          labels: |
+            momentum-sync
+            dependencies
+          body: |
+            Automated weekly check found a newer Momentum SDK.
+
+            - JS SDK: `${{ steps.pinned.outputs.js_sdk }}` → `${{ steps.npm.outputs.latest }}`
+            - Firmware directory SHA: `${{ steps.fw.outputs.directory_sha }}`
+
+            CI will verify that all JS sanity checks and C builds still pass
+            against the new SDK. Review the changelogs on the Momentum side
+            before merging.

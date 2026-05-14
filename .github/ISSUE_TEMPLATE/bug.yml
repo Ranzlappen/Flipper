@@ -1,0 +1,51 @@
+name: Bug report
+description: A script or app doesn't work as expected on a Momentum Flipper.
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please fill in everything you can — Flipper bugs
+        are very environment-specific.
+  - type: input
+    id: file
+    attributes:
+      label: Which script or app?
+      placeholder: e.g. JS-Apps/templates/subghz-remote-template.js
+    validations:
+      required: true
+  - type: input
+    id: fw
+    attributes:
+      label: Momentum firmware version
+      placeholder: e.g. 009-Rashugan (run "Settings → Firmware Info" on device)
+    validations:
+      required: true
+  - type: input
+    id: framework
+    attributes:
+      label: Framework version / tag
+      placeholder: e.g. v0.1.3
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Copy …
+        2. Open Apps → Scripts → …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output / error
+      render: shell

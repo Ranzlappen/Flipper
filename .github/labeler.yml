@@ -1,0 +1,29 @@
+"area:js":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "JS-Apps/**"
+
+"area:c":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "C-Apps/**"
+
+"area:ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - ".momentum-sdk-version"
+          - "release-please-config.json"
+          - ".release-please-manifest.json"
+
+"area:docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.md"
+          - "docs/**"
+
+"area:claude":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "CLAUDE.md"
+          - ".claude/**"

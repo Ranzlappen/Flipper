@@ -1,0 +1,23 @@
+name: Auto-merge
+
+on:
+  pull_request:
+    types: [labeled, opened, reopened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable-automerge:
+    # Only run for PRs explicitly labelled "automerge" by a CODEOWNER.
+    # GitHub's native auto-merge then waits for required checks to pass.
+    if: contains(github.event.pull_request.labels.*.name, 'automerge') && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash

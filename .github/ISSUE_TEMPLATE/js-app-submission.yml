@@ -1,0 +1,54 @@
+name: JS script submission
+description: You wrote a JS script you'd like included in the framework.
+labels: ["submission", "area:js", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Submitting is a two-step process: open this issue describing the
+        script, then open a PR that adds the file under `JS-Apps/examples/`
+        or `JS-Apps/templates/`. CI must pass (`npm run validate` covers
+        the SDK module allowlist).
+  - type: input
+    id: name
+    attributes:
+      label: Script name
+      placeholder: e.g. garage-door-remote.js
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What does it do?
+    validations:
+      required: true
+  - type: checkboxes
+    id: modules
+    attributes:
+      label: SDK modules used
+      options:
+        - { label: badusb }
+        - { label: blebeacon }
+        - { label: event_loop }
+        - { label: flipper }
+        - { label: gpio }
+        - { label: gui }
+        - { label: i2c }
+        - { label: math }
+        - { label: notification }
+        - { label: serial }
+        - { label: spi }
+        - { label: storage }
+        - { label: subghz }
+        - { label: usbdisk }
+        - { label: vgm }
+  - type: input
+    id: tested-on
+    attributes:
+      label: Tested on Momentum firmware version
+    validations:
+      required: true
+  - type: input
+    id: pr
+    attributes:
+      label: Linked PR (once opened)

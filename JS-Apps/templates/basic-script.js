@@ -13,13 +13,13 @@
 // =============================================================================
 
 let flipper = require("flipper");
-let notify  = require("notification");
+let notify = require("notification");
 
 print("Hello from Momentum JS!");
 print("Model:           ", flipper.getModel());
 print("Name:            ", flipper.getName());
 print("Battery (%):     ", flipper.getBatteryCharge());
-print("Firmware vendor: ", flipper.firmwareVendor);   // "momentum" on Momentum
+print("Firmware vendor: ", flipper.firmwareVendor); // "momentum" on Momentum
 
 // Quick visual + audible feedback: short blue flash, then the standard
 // "success" notification (green LED + happy beep + vibration).

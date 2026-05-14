@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JS sanity: prettier, typecheck, validate (FAM + require allowlist), smoke.
+  # ---------------------------------------------------------------------------
+  js:
+    name: JS sanity
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: JS-Apps
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: JS-Apps/package-lock.json
+
+      - run: npm ci
+
+      - name: Prettier check
+        run: npm run format:check
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Validate (FAM + SDK allowlist)
+        run: npm run validate
+
+      - name: Smoke run
+        run: npm run smoke
+
+  # ---------------------------------------------------------------------------
+  # C apps: build each application.fam under C-Apps/ as its own matrix cell.
+  # Skipped cleanly when no apps exist yet (template-only state).
+  # ---------------------------------------------------------------------------
+  discover-c-apps:
+    name: Discover C apps
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.find.outputs.apps }}
+      count: ${{ steps.find.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        run: |
+          set -euo pipefail
+          # Find every non-template application.fam.
+          mapfile -t fams < <(find C-Apps -type f -name 'application.fam' \
+            -not -path 'C-Apps/templates/*' | sort)
+          count=${#fams[@]}
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -eq 0 ]; then
+            echo "apps=[]" >> "$GITHUB_OUTPUT"
+          else
+            json=$(printf '%s\n' "${fams[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "apps=$json" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Discovered $count C app(s)"
+
+  c-build:
+    name: Build ${{ matrix.fam }}
+    needs: discover-c-apps
+    if: needs.discover-c-apps.outputs.count != '0'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fam: ${{ fromJSON(needs.discover-c-apps.outputs.apps) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned Momentum SDK
+        id: sdk
+        run: |
+          set -a; . ./.momentum-sdk-version; set +a
+          echo "channel=${UFBT_CHANNEL}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache uFBT SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.ufbt
+          key: ufbt-${{ runner.os }}-${{ steps.sdk.outputs.channel }}-${{ hashFiles('.momentum-sdk-version') }}
+
+      - name: Install uFBT
+        run: pip install --upgrade ufbt
+
+      - name: Bootstrap uFBT for Momentum
+        run: |
+          ufbt update \
+            --index-url=https://up.momentum-fw.dev/firmware/directory.json \
+            --channel=${{ steps.sdk.outputs.channel }}
+
+      - name: Build ${{ matrix.fam }}
+        run: |
+          set -euo pipefail
+          appdir="$(dirname '${{ matrix.fam }}')"
+          (cd "$appdir" && ufbt)
+          ls "$appdir"/dist/*.fap
