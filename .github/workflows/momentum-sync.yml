@@ -18,7 +18,7 @@ jobs:
     name: Check for new Momentum SDK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Read currently pinned versions
         id: pinned
@@ -79,7 +79,7 @@ jobs:
 
       - name: Open PR
         if: steps.decide.outputs.changed == '1'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: momentum-sync/auto
           delete-branch: true
