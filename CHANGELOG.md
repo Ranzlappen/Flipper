@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/Ranzlappen/Flipper/compare/v0.1.7...v0.1.8) (2026-05-14)
+
+
+### Bug Fixes
+
+* **ci:** authenticate release-please as a user via PAT to unblock CI ([c193d7c](https://github.com/Ranzlappen/Flipper/commit/c193d7c62893e09205c9b5e55eef5784cbd1b850))
+* **ci:** authenticate release-please as a user via PAT to unblock CI ([#23](https://github.com/Ranzlappen/Flipper/issues/23)) ([347c965](https://github.com/Ranzlappen/Flipper/commit/347c9657bfaaedbfbfcf14d0df8a0bf728007894))
+
 ## [0.1.7](https://github.com/Ranzlappen/Flipper/compare/v0.1.6...v0.1.7) (2026-05-14)
 
 
