@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/Ranzlappen/Flipper/compare/v0.1.6...v0.1.7) (2026-05-14)
+
+
+### Bug Fixes
+
+* **ci:** use correct release-please field name 'extra-label' (singular) ([3008bf1](https://github.com/Ranzlappen/Flipper/commit/3008bf17dadaf05d31494fc0a057a56e855fd4f1))
+
 ## [0.1.6](https://github.com/Ranzlappen/Flipper/compare/v0.1.5...v0.1.6) (2026-05-14)
 
 
