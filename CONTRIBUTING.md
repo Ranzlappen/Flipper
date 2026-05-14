@@ -105,6 +105,63 @@ Also configure:
 - **Always suggest updating pull request branches**: ON (optional, helps
   keep PR branches current relative to main).
 
+## `RELEASE_PLEASE_TOKEN` secret (required for full automation)
+
+GitHub suppresses workflow triggers caused by the default `GITHUB_TOKEN`.
+That breaks two things in our pipeline:
+
+1. The release PR opened by release-please-bot doesn't fire its own
+   `pull_request` event, so CI never runs against it, and the required
+   status checks sit on `Expected — Waiting for status to be reported`
+   forever. Auto-merge waits indefinitely.
+2. The release published by release-please-bot doesn't fire `release:
+   published`, so `release-artifacts.yml` never builds and attaches the
+   `.fap`.
+
+Both go away if release-please-action authenticates as a *user* (PAT)
+rather than as the bot.
+
+### Create the token
+
+1. GitHub Settings (your account, not the repo) → Developer settings →
+   Personal access tokens → **Tokens (classic)** → Generate new token
+   (classic).
+2. Note: `Flipper release-please`. Expiration: your call — 1 year is a
+   reasonable default; "No expiration" works if you accept the rotation
+   risk.
+3. Scope: tick **`repo`** only. (`workflow` is not needed because
+   release-please-bot never modifies `.github/workflows/`.)
+4. Generate → copy the token.
+
+### Store as a repo secret
+
+Repo Settings → Secrets and variables → Actions → New repository secret:
+
+- Name: `RELEASE_PLEASE_TOKEN`
+- Value: (paste the token)
+
+After this, the next release-please workflow run picks up the secret via
+the `token:` input in `.github/workflows/release-please.yml`. The
+workflow falls back to `GITHUB_TOKEN` if the secret is missing — useful
+during initial setup, but means you'll need to close+reopen each
+release PR by hand until the secret is in place.
+
+### Fine-grained PAT alternative
+
+If you prefer fine-grained PATs:
+
+- Repository access: only this repo.
+- Repository permissions:
+  - Contents: Read and write
+  - Pull requests: Read and write
+  - Metadata: Read-only (always required)
+  - Issues: Read and write (release-please occasionally comments)
+
+### Rotation
+
+When the token expires GitHub emails you 7 days before. Replace the
+secret value with a new token; no code change needed.
+
 ## Adding a new JS script
 
 1. Put the file under `JS-Apps/templates/` (generic) or `JS-Apps/examples/`

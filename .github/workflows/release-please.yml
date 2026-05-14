@@ -16,25 +16,17 @@ concurrency:
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.rp.outputs.release_created }}
-      tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
-        id: rp
         with:
+          # PAT identity (not GITHUB_TOKEN) so:
+          #   - the release PR's pull_request event fires CI (otherwise
+          #     GitHub suppresses workflow triggers from GITHUB_TOKEN actions)
+          #   - the release-published event fires release-artifacts.yml
+          #     for the same reason
+          # If RELEASE_PLEASE_TOKEN is unset, the action falls back to
+          # GITHUB_TOKEN and you'll need to close+reopen each release PR by
+          # hand to wake up CI. See CONTRIBUTING.md for PAT setup.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-
-  # When release-please cuts a release, build and attach artifacts in the
-  # same workflow run. We can't rely on the `release: published` trigger of
-  # release-artifacts.yml because GitHub suppresses workflow events caused
-  # by the default GITHUB_TOKEN.
-  attach-artifacts:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    uses: ./.github/workflows/release-artifacts.yml
-    with:
-      tag: ${{ needs.release-please.outputs.tag_name }}
-    permissions:
-      contents: write
