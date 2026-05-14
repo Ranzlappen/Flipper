@@ -1,8 +1,23 @@
 name: Release artifacts
 
 on:
+  # Fires when a Release is published by a human via the GitHub UI.
+  # Note: this does NOT fire when release-please-action creates the release
+  # using the default GITHUB_TOKEN — GitHub suppresses workflow triggers
+  # caused by GITHUB_TOKEN to prevent recursion. release-please.yml calls
+  # this workflow directly via workflow_call to cover that case.
   release:
     types: [published]
+
+  # Called by release-please.yml after it creates a release.
+  workflow_call:
+    inputs:
+      tag:
+        description: "Existing release tag to attach artifacts to (e.g. v0.2.0)"
+        required: true
+        type: string
+
+  # Manual recovery: attach artifacts to an existing release after the fact.
   workflow_dispatch:
     inputs:
       tag:
