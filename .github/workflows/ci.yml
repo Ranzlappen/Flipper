@@ -120,3 +120,34 @@ jobs:
           appdir="$(dirname '${{ matrix.fam }}')"
           (cd "$appdir" && ufbt)
           ls "$appdir"/dist/*.fap
+
+  # Stable-named gate for branch protection. The per-cell c-build jobs are
+  # named "Build <path>", which expands at runtime — you can't pin those as
+  # required status checks because the names change whenever you add a C
+  # app, and GitHub branch protection does not support globs in check names.
+  # This job aggregates the matrix's result under one fixed name so a single
+  # required-status entry ("CI / Build required") covers any number of cells,
+  # including zero.
+  c-build-required:
+    name: Build required
+    needs: [discover-c-apps, c-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate matrix result
+        run: |
+          set -euo pipefail
+          discover='${{ needs.discover-c-apps.result }}'
+          build='${{ needs.c-build.result }}'
+          echo "discover-c-apps: $discover"
+          echo "c-build:        $build"
+          if [ "$discover" != 'success' ]; then
+            echo "::error::discover-c-apps did not succeed"
+            exit 1
+          fi
+          # Empty matrix (no non-template apps) reports c-build as 'skipped' — fine.
+          if [ "$build" = 'failure' ] || [ "$build" = 'cancelled' ]; then
+            echo "::error::one or more c-build matrix cells failed"
+            exit 1
+          fi
+          echo "All C-app builds OK"
