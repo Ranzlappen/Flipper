@@ -15,6 +15,11 @@ signal from an Infrared `.ir` file. All six buttons (UP / DOWN / LEFT / RIGHT
 Short-press BACK fires its binding just like the other buttons — only the
 long-press exits.
 
+> **Note:** hold-BACK only exits from the **main view**. Inside the editor
+> (any submenu), short-BACK saves and returns you to the main view; from
+> there, hold-BACK exits the app. This is a Flipper submenu limitation —
+> long-press doesn't propagate to the navigation handler — not a bug.
+
 ## On-device editor
 
 Hold OK from the main view. You'll see a submenu of all six buttons with

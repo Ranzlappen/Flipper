@@ -12,7 +12,7 @@ App(
     apptype=FlipperAppType.EXTERNAL,
     entry_point="universal_remote_app",
     requires=["gui", "storage"],
-    stack_size=4 * 1024,
+    stack_size=8 * 1024,
     fap_category="Tools",
     fap_author="Momentum App Framework",
     fap_version="0.1",
