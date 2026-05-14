@@ -16,12 +16,25 @@ concurrency:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: rp
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-    outputs:
-      release_created: ${{ steps.rp.outputs.release_created }}
-      tag_name: ${{ steps.rp.outputs.tag_name }}
+
+  # When release-please cuts a release, build and attach artifacts in the
+  # same workflow run. We can't rely on the `release: published` trigger of
+  # release-artifacts.yml because GitHub suppresses workflow events caused
+  # by the default GITHUB_TOKEN.
+  attach-artifacts:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release-artifacts.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    permissions:
+      contents: write
