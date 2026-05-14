@@ -26,12 +26,11 @@
 #include <storage/storage.h>
 
 #define TAG                  "UniversalRemote"
-#define UR_SIGNAL_NAMES_CAP  32
+#define UR_SIGNAL_NAMES_CAP  64
 #define UR_LABEL_BUF         48
 
 typedef enum {
     UrStatusIdle = 0,
-    UrStatusTransmitting,
     UrStatusOk,
     UrStatusFailed,
     UrStatusUnbound,
@@ -90,6 +89,7 @@ typedef struct {
     FuriString* scratch_path;
     FuriString* scratch_names[UR_SIGNAL_NAMES_CAP];
     size_t scratch_names_count;
+    bool scratch_names_truncated;
 
     // Last-press feedback for the main view
     UrStatus status;
@@ -102,17 +102,15 @@ typedef struct {
 
 static const char* status_text(UrStatus s) {
     switch(s) {
-    case UrStatusTransmitting:
-        return "TX…";
     case UrStatusOk:
         return "OK";
     case UrStatusFailed:
-        return "FAILED";
+        return "FAIL";
     case UrStatusUnbound:
         return "unbound";
     case UrStatusIdle:
     default:
-        return "ready";
+        return "";
     }
 }
 
@@ -159,13 +157,17 @@ static void view_draw_callback(Canvas* canvas, void* model) {
     }
 
     canvas_draw_line(canvas, 0, 56, 128, 56);
-    char status[40];
-    snprintf(
-        status,
-        sizeof(status),
-        "%s %s   hold OK=edit  hold BACK=exit",
-        app->last_pressed < UrButtonCount ? ur_button_to_name(app->last_pressed) : "",
-        status_text(app->status));
+    char status[48];
+    if(app->last_pressed < UrButtonCount && app->status != UrStatusIdle) {
+        snprintf(
+            status,
+            sizeof(status),
+            "last: %s %s",
+            ur_button_to_name(app->last_pressed),
+            status_text(app->status));
+    } else {
+        snprintf(status, sizeof(status), "hold OK=edit  hold BACK=exit");
+    }
     canvas_draw_str(canvas, 0, 64, status);
 }
 
@@ -228,8 +230,6 @@ static void notify_status(UrApp* app, UrStatus s) {
         notification_message(app->notifications, &sequence_error);
     } else if(s == UrStatusUnbound) {
         notification_message(app->notifications, &sequence_blink_yellow_100);
-    } else if(s == UrStatusTransmitting) {
-        notification_message(app->notifications, &sequence_blink_blue_100);
     }
 }
 
@@ -239,7 +239,10 @@ static void do_dispatch(UrApp* app, UrButton b) {
         notify_status(app, UrStatusUnbound);
         return;
     }
-    notify_status(app, UrStatusTransmitting);
+    // LED-only mid-transmit feedback. The on-screen "TX…" state used to
+    // live here, but the canvas can't redraw while the dispatcher thread
+    // is blocked in ur_tx_*. LED is queued by the notification service.
+    notification_message(app->notifications, &sequence_blink_blue_100);
 
     bool ok = false;
     if(bind->kind == UrActionSubGhz) {
@@ -265,6 +268,7 @@ static void scratch_names_clear(UrApp* app) {
 
 static void read_ir_signal_names(UrApp* app, const char* path) {
     scratch_names_clear(app);
+    app->scratch_names_truncated = false;
     Storage* storage = furi_record_open(RECORD_STORAGE);
     FlipperFormat* fff = flipper_format_buffered_file_alloc(storage);
     FuriString* header = furi_string_alloc();
@@ -273,10 +277,15 @@ static void read_ir_signal_names(UrApp* app, const char* path) {
     if(flipper_format_buffered_file_open_existing(fff, path)) {
         uint32_t version = 0;
         if(flipper_format_read_header(fff, header, &version)) {
-            while(app->scratch_names_count < UR_SIGNAL_NAMES_CAP &&
-                  flipper_format_read_string(fff, "name", name)) {
-                app->scratch_names[app->scratch_names_count++] =
-                    furi_string_alloc_set(name);
+            // Read one past the cap so we can flag truncation.
+            while(flipper_format_read_string(fff, "name", name)) {
+                if(app->scratch_names_count < UR_SIGNAL_NAMES_CAP) {
+                    app->scratch_names[app->scratch_names_count++] =
+                        furi_string_alloc_set(name);
+                } else {
+                    app->scratch_names_truncated = true;
+                    break;
+                }
             }
         }
     } else {
@@ -287,6 +296,21 @@ static void read_ir_signal_names(UrApp* app, const char* path) {
     furi_string_free(header);
     flipper_format_free(fff);
     furi_record_close(RECORD_STORAGE);
+}
+
+static void show_truncation_popup(UrApp* app) {
+    DialogMessage* msg = dialog_message_alloc();
+    dialog_message_set_header(msg, "Too many signals", 64, 4, AlignCenter, AlignTop);
+    dialog_message_set_text(
+        msg,
+        "Only first 64 signals shown.\nEdit config.txt for the rest.",
+        64,
+        32,
+        AlignCenter,
+        AlignCenter);
+    dialog_message_set_buttons(msg, NULL, "OK", NULL);
+    dialog_message_show(app->dialogs, msg);
+    dialog_message_free(msg);
 }
 
 // --------------------------------------------------------------------------
@@ -372,8 +396,12 @@ static bool pick_file(UrApp* app, const char* base, const char* ext, FuriString*
     opts.base_path = base;
     opts.hide_dot_files = true;
     opts.hide_ext = false;
-    furi_string_set(out, base);
-    return dialog_file_browser_show(app->dialogs, out, out, &opts);
+    // Separate preselect buffer so the browser's writes to `out` can't
+    // clobber the preselected path mid-call.
+    FuriString* preselect = furi_string_alloc_set(base);
+    bool picked = dialog_file_browser_show(app->dialogs, out, preselect, &opts);
+    furi_string_free(preselect);
+    return picked;
 }
 
 static void kind_menu_callback(void* ctx, uint32_t index) {
@@ -411,6 +439,9 @@ static void kind_menu_callback(void* ctx, uint32_t index) {
             FURI_LOG_W(TAG, "ir: no signals found in %s", furi_string_get_cstr(app->scratch_path));
             switch_view(app, UrViewIdEditMenu);
             return;
+        }
+        if(app->scratch_names_truncated) {
+            show_truncation_popup(app);
         }
         rebuild_signal_menu(app);
         switch_view(app, UrViewIdSignalMenu);
@@ -512,6 +543,7 @@ static UrApp* app_alloc(void) {
     app->editing_button = UrButtonUp;
     app->scratch_path = furi_string_alloc();
     app->scratch_names_count = 0;
+    app->scratch_names_truncated = false;
     for(size_t i = 0; i < UR_SIGNAL_NAMES_CAP; i++) app->scratch_names[i] = NULL;
     app->current_view = UrViewIdMain;
 

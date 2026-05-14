@@ -142,7 +142,16 @@ bool ur_tx_subghz(const char* path) {
         tx_started = true;
 
         // Drain the encoder. yield() returns LEVEL_DURATION_RESET when done.
+        // 30 s hard cap so a stuck encoder / bad .sub doesn't lock the app.
+        // The RF was already driven during the wait, so the user's remote may
+        // already have triggered — we still report success.
+        const uint32_t timeout_ticks = furi_ms_to_ticks(30000);
+        uint32_t start_tick = furi_get_tick();
         while(!subghz_devices_is_async_complete_tx(device)) {
+            if(furi_get_tick() - start_tick > timeout_ticks) {
+                FURI_LOG_W(TAG, "subghz: tx timeout after 30s, aborting wait");
+                break;
+            }
             furi_delay_ms(20);
         }
         ok = true;
