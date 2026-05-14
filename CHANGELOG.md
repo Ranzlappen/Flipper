@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4](https://github.com/Ranzlappen/Flipper/compare/v0.1.3...v0.1.4) (2026-05-14)
+
+
+### Bug Fixes
+
+* **c-app:** pre-hardware hardening for universal remote ([86d753f](https://github.com/Ranzlappen/Flipper/commit/86d753fc0e31383e556ba15f11abf25d76cf937c))
+* **c-app:** pre-hardware hardening for universal remote ([839c666](https://github.com/Ranzlappen/Flipper/commit/839c6664226416f46ec043c6a4c29877e5232c9d))
+
 ## [0.1.3](https://github.com/Ranzlappen/Flipper/compare/v0.1.2...v0.1.3) (2026-05-14)
 
 
