@@ -17,10 +17,10 @@
     { "type": "refactor", "section": "Refactoring", "hidden": true },
     { "type": "test", "section": "Tests", "hidden": true }
   ],
-  "extra-labels": ["automerge"],
   "packages": {
     ".": {
-      "package-name": "momentum-app-framework"
+      "package-name": "momentum-app-framework",
+      "extra-labels": ["automerge"]
     }
   }
 }
