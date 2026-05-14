@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/Ranzlappen/Flipper/compare/v0.1.2...v0.1.3) (2026-05-14)
+
+
+### Bug Fixes
+
+* **ci:** attach release artifacts when release-please cuts a release ([99de62d](https://github.com/Ranzlappen/Flipper/commit/99de62d602d05be731532b7d931c665ddb56772d))
+* **ci:** attach release artifacts when release-please cuts a release ([29345a5](https://github.com/Ranzlappen/Flipper/commit/29345a50e5a251a1954043b1d913605f8f7c6e1a))
+
 ## [0.1.2](https://github.com/Ranzlappen/Flipper/compare/v0.1.1...v0.1.2) (2026-05-14)
 
 
