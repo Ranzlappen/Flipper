@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.5](https://github.com/Ranzlappen/Flipper/compare/v0.1.4...v0.1.5) (2026-05-14)
+
+
+### Documentation
+
+* drop required-approval recommendation from branch protection ([d4d5cc3](https://github.com/Ranzlappen/Flipper/commit/d4d5cc3c72e5a3ec20bf89f1914e88b4aa179fe8))
+* drop required-approval recommendation from branch protection ([194a79a](https://github.com/Ranzlappen/Flipper/commit/194a79a8f3780b375772c8e3de26532276952313))
+
 ## [0.1.4](https://github.com/Ranzlappen/Flipper/compare/v0.1.3...v0.1.4) (2026-05-14)
 
 
