@@ -1,13 +1,23 @@
 // Universal Remote — Momentum App Framework
 //
-// All six hardware buttons (UP/DOWN/LEFT/RIGHT/OK/BACK) are mappable to a
-// saved Sub-GHz `.sub` file or a named signal from an `.ir` file.
-//   Short press  → fire the bound action.
-//   Hold OK      → enter the on-device editor.
-//   Hold BACK    → exit the app.
+// Multi-remote app: maintains a list of remote profiles on the SD card and
+// lets the user fire Sub-GHz / Infrared bindings from a polished D-pad view.
 //
-// Mappings live in /ext/apps_data/universal_remote/config.txt. The editor
-// rewrites that file on save (any comments you put in by hand will be lost).
+//   Remote list (default view):
+//     - "[+ New remote]" creates a fresh profile via text input.
+//     - Picking a remote opens its D-pad view.
+//     - BACK exits the app.
+//
+//   D-pad view (per-remote):
+//     - Short-press UP/DOWN/LEFT/RIGHT   → fire that direction's SHORT binding.
+//     - Long-press  UP/DOWN/LEFT/RIGHT   → fire that direction's LONG binding.
+//     - Short-press OK / BACK            → fire OK / BACK binding (short-only).
+//     - Hold OK                          → enter the per-remote editor.
+//     - Hold BACK or short-BACK          → return to the remote list.
+//
+// Profiles live as one file per remote under
+// /ext/apps_data/universal_remote/remotes/<basename>.urcfg. The format is
+// documented in README.md.
 
 #include "universal_remote_config.h"
 #include "universal_remote_transmit.h"
@@ -20,6 +30,7 @@
 #include <gui/view_dispatcher.h>
 #include <gui/elements.h>
 #include <gui/modules/submenu.h>
+#include <gui/modules/text_input.h>
 #include <input/input.h>
 #include <notification/notification.h>
 #include <notification/notification_messages.h>
@@ -28,6 +39,7 @@
 #define TAG                  "UniversalRemote"
 #define UR_SIGNAL_NAMES_CAP  64
 #define UR_LABEL_BUF         48
+#define UR_NAME_INPUT_BUF    (UR_NAME_MAX + 1)
 
 typedef enum {
     UrStatusIdle = 0,
@@ -37,28 +49,39 @@ typedef enum {
 } UrStatus;
 
 typedef enum {
-    UrViewIdMain = 0,
+    UrViewIdRemoteList = 0,
+    UrViewIdMain,
+    UrViewIdNameInput,
     UrViewIdEditMenu,
     UrViewIdKindMenu,
     UrViewIdSignalMenu,
 } UrViewId;
 
 typedef enum {
-    // Main view → transmit one of the 6 buttons (offset by UrButton index).
+    UrNameModeCreate = 0,
+    UrNameModeRename,
+} UrNameMode;
+
+// Custom event ids dispatched through the view_dispatcher.
+//   Dispatch range:  100..100 + UrButtonCount*UrGestureCount-1
+//   OpenRemote rng:  200..200 + UR_REMOTES_MAX-1
+//   Singletons after.
+typedef enum {
     UrCustomEventDispatch = 100,
-
-    // Main view → enter / exit (offset above to avoid range overlap).
-    UrCustomEventEnterEdit = 200,
+    UrCustomEventOpenRemote = 200,
+    UrCustomEventNewRemote = 300,
+    UrCustomEventEnterEdit,
+    UrCustomEventBackToList,
     UrCustomEventExit,
-
-    // Edit menu item indexes; safe to overlap with custom event ids
-    // because they're routed through submenu callback, not view_dispatcher.
 } UrCustomEvent;
 
-// Indexes used inside the edit-main submenu callback. First UrButtonCount
-// indexes map 1:1 to UrButton; meta-actions come after.
+// Edit-menu item ordering. 10 binding slots + Rename + Delete + Save + Discard.
 typedef enum {
-    UrEditItemSave = UrButtonCount,
+    UrEditItemBindingsBase = 0,
+    UrEditItemBindingsCount = 10, // 4 dirs × 2 + OK + BACK
+    UrEditItemRename = 10,
+    UrEditItemDelete,
+    UrEditItemSave,
     UrEditItemDiscard,
 } UrEditItem;
 
@@ -70,15 +93,19 @@ typedef enum {
 
 typedef struct {
     // Persistent state
-    UrConfig* config; // live config (matches disk)
-    UrConfig* edit_config; // pending edits while in editor
+    UrConfig* config; // currently loaded remote (NULL until one is picked)
+    UrConfig* edit_config; // scratch buffer for editor
+    UrRemoteIndex* remotes; // cached list of remotes
 
     // GUI handles
     Gui* gui;
     NotificationApp* notifications;
     DialogsApp* dialogs;
     ViewDispatcher* view_dispatcher;
+
+    Submenu* remote_list_menu;
     View* main_view;
+    TextInput* name_input;
     Submenu* edit_menu;
     Submenu* kind_menu;
     Submenu* signal_menu;
@@ -86,15 +113,64 @@ typedef struct {
 
     // Edit-time scratch
     UrButton editing_button;
+    UrGesture editing_gesture;
     FuriString* scratch_path;
     FuriString* scratch_names[UR_SIGNAL_NAMES_CAP];
     size_t scratch_names_count;
     bool scratch_names_truncated;
 
+    // Text input scratch
+    char name_buffer[UR_NAME_INPUT_BUF];
+    UrNameMode name_mode;
+
     // Last-press feedback for the main view
     UrStatus status;
     UrButton last_pressed;
+    UrGesture last_gesture;
 } UrApp;
+
+// 10 editor slots, in display order. Indexed by UrEditItemBindingsBase..+9.
+static const UrButton edit_slot_button[UrEditItemBindingsCount] = {
+    UrButtonUp,
+    UrButtonUp,
+    UrButtonDown,
+    UrButtonDown,
+    UrButtonLeft,
+    UrButtonLeft,
+    UrButtonRight,
+    UrButtonRight,
+    UrButtonOk,
+    UrButtonBack,
+};
+static const UrGesture edit_slot_gesture[UrEditItemBindingsCount] = {
+    UrGestureShort,
+    UrGestureLong,
+    UrGestureShort,
+    UrGestureLong,
+    UrGestureShort,
+    UrGestureLong,
+    UrGestureShort,
+    UrGestureLong,
+    UrGestureShort,
+    UrGestureShort,
+};
+
+// --------------------------------------------------------------------------
+// Forward declarations
+// --------------------------------------------------------------------------
+
+static void switch_view(UrApp* app, UrViewId view);
+static void refresh_remote_list(UrApp* app);
+static void open_remote(UrApp* app, size_t index);
+static void rebuild_edit_menu(UrApp* app);
+static void rebuild_kind_menu(UrApp* app);
+static void rebuild_signal_menu(UrApp* app);
+
+static void remote_list_callback(void* ctx, uint32_t index);
+static void edit_menu_callback(void* ctx, uint32_t index);
+static void kind_menu_callback(void* ctx, uint32_t index);
+static void signal_menu_callback(void* ctx, uint32_t index);
+static void name_input_callback(void* ctx);
 
 // --------------------------------------------------------------------------
 // Helpers
@@ -129,46 +205,207 @@ static void binding_summary(const UrBinding* bind, char* out, size_t cap) {
     }
 }
 
+// Compact form: filename without extension, truncated, for the D-pad view.
+static void binding_short_label(const UrBinding* bind, char* out, size_t cap) {
+    if(bind->kind == UrActionNone || furi_string_empty(bind->path)) {
+        snprintf(out, cap, "-");
+        return;
+    }
+    const char* p = furi_string_get_cstr(bind->path);
+    const char* slash = strrchr(p, '/');
+    const char* base = slash ? slash + 1 : p;
+    // Drop extension.
+    const char* dot = strrchr(base, '.');
+    size_t len = dot ? (size_t)(dot - base) : strlen(base);
+    if(bind->kind == UrActionInfrared && !furi_string_empty(bind->name)) {
+        // IR: show just the signal name (more useful than the file).
+        snprintf(out, cap, "%s", furi_string_get_cstr(bind->name));
+    } else {
+        size_t copy = len < (cap - 1) ? len : (cap - 1);
+        memcpy(out, base, copy);
+        out[copy] = '\0';
+    }
+}
+
 static void switch_view(UrApp* app, UrViewId view) {
     app->current_view = view;
     view_dispatcher_switch_to_view(app->view_dispatcher, view);
 }
 
 // --------------------------------------------------------------------------
-// Main view: draw + raw input
+// Remote list view
 // --------------------------------------------------------------------------
+
+static void refresh_remote_list(UrApp* app) {
+    if(app->remotes) ur_remotes_free(app->remotes);
+    app->remotes = ur_remotes_scan();
+
+    submenu_reset(app->remote_list_menu);
+    submenu_set_header(app->remote_list_menu, "Universal Remote");
+
+    submenu_add_item(
+        app->remote_list_menu,
+        "[+ New remote]",
+        UR_REMOTES_MAX, // sentinel index meaning "create"
+        remote_list_callback,
+        app);
+
+    for(size_t i = 0; i < app->remotes->count; i++) {
+        submenu_add_item(
+            app->remote_list_menu,
+            furi_string_get_cstr(app->remotes->names[i]),
+            (uint32_t)i,
+            remote_list_callback,
+            app);
+    }
+}
+
+static void remote_list_callback(void* ctx, uint32_t index) {
+    UrApp* app = ctx;
+    if(index == UR_REMOTES_MAX) {
+        // "[+ New remote]" — show the text input.
+        app->name_mode = UrNameModeCreate;
+        app->name_buffer[0] = '\0';
+        text_input_set_header_text(app->name_input, "Name the new remote");
+        text_input_set_result_callback(
+            app->name_input,
+            name_input_callback,
+            app,
+            app->name_buffer,
+            UR_NAME_INPUT_BUF,
+            true);
+        switch_view(app, UrViewIdNameInput);
+        return;
+    }
+    if(index < app->remotes->count) {
+        view_dispatcher_send_custom_event(
+            app->view_dispatcher, UrCustomEventOpenRemote + (uint32_t)index);
+    }
+}
+
+static void open_remote(UrApp* app, size_t index) {
+    if(index >= app->remotes->count) return;
+    if(app->config) {
+        ur_config_free(app->config);
+        app->config = NULL;
+    }
+    app->config = ur_config_load(furi_string_get_cstr(app->remotes->paths[index]));
+    app->status = UrStatusIdle;
+    app->last_pressed = UrButtonCount;
+    app->last_gesture = UrGestureShort;
+    switch_view(app, UrViewIdMain);
+}
+
+// --------------------------------------------------------------------------
+// Main view (custom canvas)
+// --------------------------------------------------------------------------
+
+// Draw a small filled arrow at (cx, cy) pointing in `dir`. Box is 7×7.
+static void draw_arrow(Canvas* canvas, int cx, int cy, char dir) {
+    // Filled triangle via three rows / columns.
+    switch(dir) {
+    case 'U':
+        canvas_draw_line(canvas, cx, cy - 3, cx, cy + 3);
+        canvas_draw_line(canvas, cx - 1, cy - 2, cx + 1, cy - 2);
+        canvas_draw_line(canvas, cx - 2, cy - 1, cx + 2, cy - 1);
+        break;
+    case 'D':
+        canvas_draw_line(canvas, cx, cy - 3, cx, cy + 3);
+        canvas_draw_line(canvas, cx - 1, cy + 2, cx + 1, cy + 2);
+        canvas_draw_line(canvas, cx - 2, cy + 1, cx + 2, cy + 1);
+        break;
+    case 'L':
+        canvas_draw_line(canvas, cx - 3, cy, cx + 3, cy);
+        canvas_draw_line(canvas, cx - 2, cy - 1, cx - 2, cy + 1);
+        canvas_draw_line(canvas, cx - 1, cy - 2, cx - 1, cy + 2);
+        break;
+    case 'R':
+        canvas_draw_line(canvas, cx - 3, cy, cx + 3, cy);
+        canvas_draw_line(canvas, cx + 2, cy - 1, cx + 2, cy + 1);
+        canvas_draw_line(canvas, cx + 1, cy - 2, cx + 1, cy + 2);
+        break;
+    default:
+        break;
+    }
+}
 
 static void view_draw_callback(Canvas* canvas, void* model) {
     UrApp* app = *(UrApp**)model;
     canvas_clear(canvas);
 
+    // ----- Title bar -----
+    const char* title = app->config ? furi_string_get_cstr(app->config->display_name) :
+                                      "Universal Remote";
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 0, 10, "Universal Remote");
+    char title_buf[28];
+    snprintf(title_buf, sizeof(title_buf), "%s", title);
+    if(strlen(title_buf) > 21) {
+        title_buf[20] = 0xE2; // unused; will be overwritten
+        title_buf[20] = '.';
+        title_buf[21] = '\0';
+    }
+    canvas_draw_str(canvas, 2, 9, title_buf);
+    canvas_draw_line(canvas, 0, 11, 128, 11);
 
-    canvas_set_font(canvas, FontSecondary);
-    int y = 20;
-    char line[UR_LABEL_BUF * 2];
-    char summary[UR_LABEL_BUF];
-    for(size_t i = 0; i < UrButtonCount; i++) {
-        binding_summary(&app->config->bindings[i], summary, sizeof(summary));
-        snprintf(line, sizeof(line), "%-5s %s", ur_button_to_name((UrButton)i), summary);
-        canvas_draw_str(canvas, 0, y, line);
-        y += 7;
+    if(!app->config) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str(canvas, 2, 25, "No remote loaded.");
+        canvas_draw_str(canvas, 2, 35, "Press BACK to pick one.");
+        return;
     }
 
-    canvas_draw_line(canvas, 0, 56, 128, 56);
-    char status[48];
+    // ----- D-pad rows -----
+    // Each direction shows: [arrow]  short  /  long  (compact)
+    canvas_set_font(canvas, FontSecondary);
+    static const char* row_dir = "UDLR";
+    static const UrButton row_btn[4] = {UrButtonUp, UrButtonDown, UrButtonLeft, UrButtonRight};
+    static const int row_y[4] = {20, 28, 36, 44};
+
+    char buf_short[16];
+    char buf_long[16];
+    char line[40];
+    for(size_t r = 0; r < 4; r++) {
+        draw_arrow(canvas, 6, row_y[r] - 2, row_dir[r]);
+
+        binding_short_label(
+            &app->config->bindings[row_btn[r]][UrGestureShort], buf_short, sizeof(buf_short));
+        binding_short_label(
+            &app->config->bindings[row_btn[r]][UrGestureLong], buf_long, sizeof(buf_long));
+
+        // "S:open / L:full" — truncate each side to keep total ~21 chars
+        // (5px font ~= 25 cols on a 128px screen).
+        if(strlen(buf_short) > 9) buf_short[9] = '\0';
+        if(strlen(buf_long) > 9) buf_long[9] = '\0';
+        snprintf(line, sizeof(line), "S:%-9s L:%s", buf_short, buf_long);
+        canvas_draw_str(canvas, 14, row_y[r], line);
+    }
+
+    // ----- OK / BACK row -----
+    canvas_draw_line(canvas, 0, 47, 128, 47);
+    binding_short_label(
+        &app->config->bindings[UrButtonOk][UrGestureShort], buf_short, sizeof(buf_short));
+    binding_short_label(
+        &app->config->bindings[UrButtonBack][UrGestureShort], buf_long, sizeof(buf_long));
+    if(strlen(buf_short) > 9) buf_short[9] = '\0';
+    if(strlen(buf_long) > 9) buf_long[9] = '\0';
+    snprintf(line, sizeof(line), "OK:%-9s BACK:%s", buf_short, buf_long);
+    canvas_draw_str(canvas, 2, 55, line);
+
+    // ----- Footer / status -----
+    char footer[40];
     if(app->last_pressed < UrButtonCount && app->status != UrStatusIdle) {
+        const char* gname = (app->last_gesture == UrGestureLong) ? "long" : "short";
         snprintf(
-            status,
-            sizeof(status),
-            "last: %s %s",
+            footer,
+            sizeof(footer),
+            "last: %s %s  %s",
             ur_button_to_name(app->last_pressed),
+            gname,
             status_text(app->status));
     } else {
-        snprintf(status, sizeof(status), "hold OK=edit  hold BACK=exit");
+        snprintf(footer, sizeof(footer), "hold OK=edit  BACK=list");
     }
-    canvas_draw_str(canvas, 0, 64, status);
+    canvas_draw_str(canvas, 2, 63, footer);
 }
 
 static UrButton input_key_to_button(InputKey key) {
@@ -190,20 +427,29 @@ static UrButton input_key_to_button(InputKey key) {
     }
 }
 
+static uint32_t dispatch_event(UrButton b, UrGesture g) {
+    return UrCustomEventDispatch + ((uint32_t)b * UrGestureCount) + (uint32_t)g;
+}
+
 static bool view_input_callback(InputEvent* event, void* context) {
     UrApp* app = context;
 
     if(event->type == InputTypeLong) {
-        if(event->key == InputKeyBack) {
-            view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventExit);
-            return true;
-        }
         if(event->key == InputKeyOk) {
-            view_dispatcher_send_custom_event(
-                app->view_dispatcher, UrCustomEventEnterEdit);
+            view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventEnterEdit);
             return true;
         }
-        // Any other long-press: ignore.
+        if(event->key == InputKeyBack) {
+            view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventBackToList);
+            return true;
+        }
+        UrButton b = input_key_to_button(event->key);
+        if(b == UrButtonUp || b == UrButtonDown || b == UrButtonLeft || b == UrButtonRight) {
+            app->last_pressed = b;
+            app->last_gesture = UrGestureLong;
+            view_dispatcher_send_custom_event(app->view_dispatcher, dispatch_event(b, UrGestureLong));
+            return true;
+        }
         return false;
     }
 
@@ -212,8 +458,15 @@ static bool view_input_callback(InputEvent* event, void* context) {
     UrButton b = input_key_to_button(event->key);
     if(b >= UrButtonCount) return false;
 
+    if(b == UrButtonBack) {
+        // Short-BACK returns to the list (same as long-BACK).
+        view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventBackToList);
+        return true;
+    }
+
     app->last_pressed = b;
-    view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventDispatch + b);
+    app->last_gesture = UrGestureShort;
+    view_dispatcher_send_custom_event(app->view_dispatcher, dispatch_event(b, UrGestureShort));
     return true;
 }
 
@@ -233,15 +486,13 @@ static void notify_status(UrApp* app, UrStatus s) {
     }
 }
 
-static void do_dispatch(UrApp* app, UrButton b) {
-    const UrBinding* bind = &app->config->bindings[b];
+static void do_dispatch(UrApp* app, UrButton b, UrGesture g) {
+    if(!app->config) return;
+    const UrBinding* bind = &app->config->bindings[b][g];
     if(bind->kind == UrActionNone || furi_string_empty(bind->path)) {
         notify_status(app, UrStatusUnbound);
         return;
     }
-    // LED-only mid-transmit feedback. The on-screen "TX…" state used to
-    // live here, but the canvas can't redraw while the dispatcher thread
-    // is blocked in ur_tx_*. LED is queued by the notification service.
     notification_message(app->notifications, &sequence_blink_blue_100);
 
     bool ok = false;
@@ -277,11 +528,9 @@ static void read_ir_signal_names(UrApp* app, const char* path) {
     if(flipper_format_buffered_file_open_existing(fff, path)) {
         uint32_t version = 0;
         if(flipper_format_read_header(fff, header, &version)) {
-            // Read one past the cap so we can flag truncation.
             while(flipper_format_read_string(fff, "name", name)) {
                 if(app->scratch_names_count < UR_SIGNAL_NAMES_CAP) {
-                    app->scratch_names[app->scratch_names_count++] =
-                        furi_string_alloc_set(name);
+                    app->scratch_names[app->scratch_names_count++] = furi_string_alloc_set(name);
                 } else {
                     app->scratch_names_truncated = true;
                     break;
@@ -303,7 +552,7 @@ static void show_truncation_popup(UrApp* app) {
     dialog_message_set_header(msg, "Too many signals", 64, 4, AlignCenter, AlignTop);
     dialog_message_set_text(
         msg,
-        "Only first 64 signals shown.\nEdit config.txt for the rest.",
+        "Only first 64 signals shown.\nEdit the .urcfg for the rest.",
         64,
         32,
         AlignCenter,
@@ -313,25 +562,27 @@ static void show_truncation_popup(UrApp* app) {
     dialog_message_free(msg);
 }
 
-// --------------------------------------------------------------------------
-// Edit menus (forward decls)
-// --------------------------------------------------------------------------
-
-static void rebuild_edit_menu(UrApp* app);
-static void rebuild_kind_menu(UrApp* app);
-static void rebuild_signal_menu(UrApp* app);
-
-static void edit_menu_callback(void* ctx, uint32_t index);
-static void kind_menu_callback(void* ctx, uint32_t index);
-static void signal_menu_callback(void* ctx, uint32_t index);
+static bool confirm_delete(UrApp* app, const char* name) {
+    DialogMessage* msg = dialog_message_alloc();
+    char header[40];
+    snprintf(header, sizeof(header), "Delete %s?", name);
+    dialog_message_set_header(msg, header, 64, 4, AlignCenter, AlignTop);
+    dialog_message_set_text(
+        msg, "This removes the .urcfg file.\nCannot be undone.", 64, 32, AlignCenter, AlignCenter);
+    dialog_message_set_buttons(msg, "Cancel", NULL, "Delete");
+    DialogMessageButton r = dialog_message_show(app->dialogs, msg);
+    dialog_message_free(msg);
+    return r == DialogMessageButtonRight;
+}
 
 // --------------------------------------------------------------------------
 // Edit flow
 // --------------------------------------------------------------------------
 
 static void enter_edit(UrApp* app) {
-    // Snapshot the live config so the user can discard pending edits.
+    if(!app->config) return;
     ur_config_copy(app->edit_config, app->config);
+    furi_string_set(app->edit_config->file_path, app->config->file_path);
     rebuild_edit_menu(app);
     switch_view(app, UrViewIdEditMenu);
 }
@@ -340,48 +591,113 @@ static void exit_edit(UrApp* app, bool save) {
     if(save) {
         ur_config_copy(app->config, app->edit_config);
         if(!ur_config_save(app->config)) {
-            // Best-effort: stay on the main view; user can re-try by
-            // re-entering edit mode.
             notify_status(app, UrStatusFailed);
         }
+        // Names may have changed — refresh the list so it's up to date.
+        refresh_remote_list(app);
     }
     switch_view(app, UrViewIdMain);
 }
 
 static void rebuild_edit_menu(UrApp* app) {
     submenu_reset(app->edit_menu);
-    submenu_set_header(app->edit_menu, "Edit bindings");
+    char header[40];
+    snprintf(
+        header, sizeof(header), "Edit: %s", furi_string_get_cstr(app->edit_config->display_name));
+    submenu_set_header(app->edit_menu, header);
 
     char label[UR_LABEL_BUF * 2];
     char summary[UR_LABEL_BUF];
-    for(size_t i = 0; i < UrButtonCount; i++) {
-        binding_summary(&app->edit_config->bindings[i], summary, sizeof(summary));
-        snprintf(label, sizeof(label), "%s: %s", ur_button_to_name((UrButton)i), summary);
+    for(size_t i = 0; i < UrEditItemBindingsCount; i++) {
+        UrButton b = edit_slot_button[i];
+        UrGesture g = edit_slot_gesture[i];
+        binding_summary(&app->edit_config->bindings[b][g], summary, sizeof(summary));
+        if(ur_button_has_long(b)) {
+            snprintf(
+                label,
+                sizeof(label),
+                "%s %s: %s",
+                ur_button_to_name(b),
+                (g == UrGestureLong) ? "long " : "short",
+                summary);
+        } else {
+            snprintf(label, sizeof(label), "%s: %s", ur_button_to_name(b), summary);
+        }
         submenu_add_item(app->edit_menu, label, (uint32_t)i, edit_menu_callback, app);
     }
-    submenu_add_item(
-        app->edit_menu, "Save & exit", UrEditItemSave, edit_menu_callback, app);
+    submenu_add_item(app->edit_menu, "Rename remote", UrEditItemRename, edit_menu_callback, app);
+    submenu_add_item(app->edit_menu, "Delete remote", UrEditItemDelete, edit_menu_callback, app);
+    submenu_add_item(app->edit_menu, "Save & exit", UrEditItemSave, edit_menu_callback, app);
     submenu_add_item(
         app->edit_menu, "Discard & exit", UrEditItemDiscard, edit_menu_callback, app);
 }
 
 static void edit_menu_callback(void* ctx, uint32_t index) {
     UrApp* app = ctx;
-    if(index < UrButtonCount) {
-        app->editing_button = (UrButton)index;
+    if(index < UrEditItemBindingsCount) {
+        app->editing_button = edit_slot_button[index];
+        app->editing_gesture = edit_slot_gesture[index];
         rebuild_kind_menu(app);
         switch_view(app, UrViewIdKindMenu);
-    } else if(index == UrEditItemSave) {
+        return;
+    }
+    if(index == UrEditItemRename) {
+        app->name_mode = UrNameModeRename;
+        // Pre-fill with the current display name.
+        const char* cur = furi_string_get_cstr(app->edit_config->display_name);
+        size_t n = strlen(cur);
+        if(n >= UR_NAME_INPUT_BUF) n = UR_NAME_INPUT_BUF - 1;
+        memcpy(app->name_buffer, cur, n);
+        app->name_buffer[n] = '\0';
+        text_input_set_header_text(app->name_input, "Rename remote");
+        text_input_set_result_callback(
+            app->name_input,
+            name_input_callback,
+            app,
+            app->name_buffer,
+            UR_NAME_INPUT_BUF,
+            false);
+        switch_view(app, UrViewIdNameInput);
+        return;
+    }
+    if(index == UrEditItemDelete) {
+        const char* name = furi_string_get_cstr(app->edit_config->display_name);
+        if(!confirm_delete(app, name)) {
+            // Bounce back to the edit menu.
+            switch_view(app, UrViewIdEditMenu);
+            return;
+        }
+        // Delete the file backing this remote, then return to the list.
+        ur_remote_delete(furi_string_get_cstr(app->edit_config->file_path));
+        ur_config_free(app->config);
+        app->config = NULL;
+        refresh_remote_list(app);
+        switch_view(app, UrViewIdRemoteList);
+        return;
+    }
+    if(index == UrEditItemSave) {
         exit_edit(app, true);
-    } else if(index == UrEditItemDiscard) {
+        return;
+    }
+    if(index == UrEditItemDiscard) {
         exit_edit(app, false);
+        return;
     }
 }
 
 static void rebuild_kind_menu(UrApp* app) {
     submenu_reset(app->kind_menu);
     char header[UR_LABEL_BUF];
-    snprintf(header, sizeof(header), "%s: action kind", ur_button_to_name(app->editing_button));
+    if(ur_button_has_long(app->editing_button)) {
+        snprintf(
+            header,
+            sizeof(header),
+            "%s %s: action",
+            ur_button_to_name(app->editing_button),
+            (app->editing_gesture == UrGestureLong) ? "long" : "short");
+    } else {
+        snprintf(header, sizeof(header), "%s: action", ur_button_to_name(app->editing_button));
+    }
     submenu_set_header(app->kind_menu, header);
     submenu_add_item(
         app->kind_menu, "Sub-GHz file (.sub)", UrKindItemSubGhz, kind_menu_callback, app);
@@ -396,8 +712,6 @@ static bool pick_file(UrApp* app, const char* base, const char* ext, FuriString*
     opts.base_path = base;
     opts.hide_dot_files = true;
     opts.hide_ext = false;
-    // Separate preselect buffer so the browser's writes to `out` can't
-    // clobber the preselected path mid-call.
     FuriString* preselect = furi_string_alloc_set(base);
     bool picked = dialog_file_browser_show(app->dialogs, out, preselect, &opts);
     furi_string_free(preselect);
@@ -406,7 +720,7 @@ static bool pick_file(UrApp* app, const char* base, const char* ext, FuriString*
 
 static void kind_menu_callback(void* ctx, uint32_t index) {
     UrApp* app = ctx;
-    UrBinding* bind = &app->edit_config->bindings[app->editing_button];
+    UrBinding* bind = &app->edit_config->bindings[app->editing_button][app->editing_gesture];
 
     if(index == UrKindItemClear) {
         bind->kind = UrActionNone;
@@ -430,7 +744,6 @@ static void kind_menu_callback(void* ctx, uint32_t index) {
 
     if(index == UrKindItemInfrared) {
         if(!pick_file(app, "/ext/infrared", ".ir", app->scratch_path)) {
-            // Cancelled the file picker.
             switch_view(app, UrViewIdEditMenu);
             return;
         }
@@ -470,7 +783,7 @@ static void signal_menu_callback(void* ctx, uint32_t index) {
     UrApp* app = ctx;
     if(index >= app->scratch_names_count) return;
 
-    UrBinding* bind = &app->edit_config->bindings[app->editing_button];
+    UrBinding* bind = &app->edit_config->bindings[app->editing_button][app->editing_gesture];
     bind->kind = UrActionInfrared;
     furi_string_set(bind->path, app->scratch_path);
     furi_string_set(bind->name, app->scratch_names[index]);
@@ -481,17 +794,82 @@ static void signal_menu_callback(void* ctx, uint32_t index) {
 }
 
 // --------------------------------------------------------------------------
+// Name input
+// --------------------------------------------------------------------------
+
+static void name_input_callback(void* ctx) {
+    UrApp* app = ctx;
+    const char* entered = app->name_buffer;
+    if(entered[0] == '\0') {
+        // Empty name — bounce.
+        switch_view(
+            app, app->name_mode == UrNameModeCreate ? UrViewIdRemoteList : UrViewIdEditMenu);
+        return;
+    }
+
+    if(app->name_mode == UrNameModeCreate) {
+        FuriString* new_path = furi_string_alloc();
+        bool ok = ur_remote_create(entered, new_path);
+        if(ok) {
+            refresh_remote_list(app);
+            // Open the newly created remote immediately.
+            if(app->config) {
+                ur_config_free(app->config);
+                app->config = NULL;
+            }
+            app->config = ur_config_load(furi_string_get_cstr(new_path));
+            app->status = UrStatusIdle;
+            app->last_pressed = UrButtonCount;
+            switch_view(app, UrViewIdMain);
+        } else {
+            notify_status(app, UrStatusFailed);
+            switch_view(app, UrViewIdRemoteList);
+        }
+        furi_string_free(new_path);
+        return;
+    }
+
+    // Rename: pivot edit_config to the new name (which also renames the file
+    // on save). We do the rename eagerly so the on-screen edit header updates.
+    ur_remote_rename(app->edit_config, entered);
+    // Mirror the rename in the live config so the user can see it after Save.
+    if(app->config) {
+        furi_string_set(app->config->display_name, app->edit_config->display_name);
+        furi_string_set(app->config->file_path, app->edit_config->file_path);
+    }
+    rebuild_edit_menu(app);
+    switch_view(app, UrViewIdEditMenu);
+}
+
+// --------------------------------------------------------------------------
 // ViewDispatcher event wiring
 // --------------------------------------------------------------------------
 
 static bool custom_event_callback(void* context, uint32_t event) {
     UrApp* app = context;
-    if(event >= UrCustomEventDispatch && event < UrCustomEventDispatch + UrButtonCount) {
-        do_dispatch(app, (UrButton)(event - UrCustomEventDispatch));
+
+    if(event >= UrCustomEventDispatch &&
+       event < UrCustomEventDispatch + (UrButtonCount * UrGestureCount)) {
+        uint32_t rel = event - UrCustomEventDispatch;
+        UrButton b = (UrButton)(rel / UrGestureCount);
+        UrGesture g = (UrGesture)(rel % UrGestureCount);
+        do_dispatch(app, b, g);
+        return true;
+    }
+    if(event >= UrCustomEventOpenRemote && event < UrCustomEventOpenRemote + UR_REMOTES_MAX) {
+        open_remote(app, event - UrCustomEventOpenRemote);
+        return true;
+    }
+    if(event == UrCustomEventNewRemote) {
+        // Reached via short-OK on "[+ New remote]"; same flow as the list callback.
         return true;
     }
     if(event == UrCustomEventEnterEdit) {
         enter_edit(app);
+        return true;
+    }
+    if(event == UrCustomEventBackToList) {
+        switch_view(app, UrViewIdRemoteList);
         return true;
     }
     if(event == UrCustomEventExit) {
@@ -503,7 +881,7 @@ static bool custom_event_callback(void* context, uint32_t event) {
 
 static bool navigation_event_callback(void* context) {
     UrApp* app = context;
-    // Submenus surface short BACK here. Map them back up the view stack.
+    // BACK from submenus / text input climbs the view stack.
     switch(app->current_view) {
     case UrViewIdSignalMenu:
         scratch_names_clear(app);
@@ -513,14 +891,23 @@ static bool navigation_event_callback(void* context) {
         switch_view(app, UrViewIdEditMenu);
         return true;
     case UrViewIdEditMenu:
-        // Short BACK from the edit root commits pending changes — matches
-        // common Flipper editor UX. Use "Discard & exit" to abandon.
+        // Short-BACK from the edit root commits pending edits, matching the
+        // previous behaviour. Use "Discard & exit" to abandon.
         exit_edit(app, true);
         return true;
+    case UrViewIdNameInput:
+        // Cancel name entry.
+        switch_view(
+            app, app->name_mode == UrNameModeCreate ? UrViewIdRemoteList : UrViewIdEditMenu);
+        return true;
     case UrViewIdMain:
+        // Main view consumes BACK itself; if we get here, fall through to list.
+        switch_view(app, UrViewIdRemoteList);
+        return true;
+    case UrViewIdRemoteList:
     default:
-        // Main view consumes BACK itself; getting here means the view
-        // returned false unexpectedly. Don't exit.
+        // BACK from the root list exits.
+        view_dispatcher_stop(app->view_dispatcher);
         return true;
     }
 }
@@ -531,33 +918,40 @@ static bool navigation_event_callback(void* context) {
 
 static UrApp* app_alloc(void) {
     UrApp* app = malloc(sizeof(UrApp));
-    app->config = ur_config_load();
-    app->edit_config = malloc(sizeof(UrConfig));
-    for(size_t i = 0; i < UrButtonCount; i++) {
-        app->edit_config->bindings[i].kind = UrActionNone;
-        app->edit_config->bindings[i].path = furi_string_alloc();
-        app->edit_config->bindings[i].name = furi_string_alloc();
-    }
+    app->config = NULL;
+    app->edit_config = ur_config_alloc();
+    app->remotes = NULL;
+
     app->status = UrStatusIdle;
     app->last_pressed = UrButtonCount;
+    app->last_gesture = UrGestureShort;
     app->editing_button = UrButtonUp;
+    app->editing_gesture = UrGestureShort;
     app->scratch_path = furi_string_alloc();
     app->scratch_names_count = 0;
     app->scratch_names_truncated = false;
     for(size_t i = 0; i < UR_SIGNAL_NAMES_CAP; i++) app->scratch_names[i] = NULL;
-    app->current_view = UrViewIdMain;
+    app->name_buffer[0] = '\0';
+    app->name_mode = UrNameModeCreate;
+    app->current_view = UrViewIdRemoteList;
 
     app->gui = furi_record_open(RECORD_GUI);
     app->notifications = furi_record_open(RECORD_NOTIFICATION);
     app->dialogs = furi_record_open(RECORD_DIALOGS);
 
-    // Main view.
+    // Remote list (submenu).
+    app->remote_list_menu = submenu_alloc();
+
+    // Main view (custom).
     app->main_view = view_alloc();
     view_allocate_model(app->main_view, ViewModelTypeLocking, sizeof(UrApp*));
     with_view_model(app->main_view, UrApp ** m, { *m = app; }, true);
     view_set_context(app->main_view, app);
     view_set_draw_callback(app->main_view, view_draw_callback);
     view_set_input_callback(app->main_view, view_input_callback);
+
+    // Text input.
+    app->name_input = text_input_alloc();
 
     // Submenus.
     app->edit_menu = submenu_alloc();
@@ -570,7 +964,11 @@ static UrApp* app_alloc(void) {
     view_dispatcher_set_custom_event_callback(app->view_dispatcher, custom_event_callback);
     view_dispatcher_set_navigation_event_callback(
         app->view_dispatcher, navigation_event_callback);
+    view_dispatcher_add_view(
+        app->view_dispatcher, UrViewIdRemoteList, submenu_get_view(app->remote_list_menu));
     view_dispatcher_add_view(app->view_dispatcher, UrViewIdMain, app->main_view);
+    view_dispatcher_add_view(
+        app->view_dispatcher, UrViewIdNameInput, text_input_get_view(app->name_input));
     view_dispatcher_add_view(
         app->view_dispatcher, UrViewIdEditMenu, submenu_get_view(app->edit_menu));
     view_dispatcher_add_view(
@@ -586,12 +984,16 @@ static void app_free(UrApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, UrViewIdSignalMenu);
     view_dispatcher_remove_view(app->view_dispatcher, UrViewIdKindMenu);
     view_dispatcher_remove_view(app->view_dispatcher, UrViewIdEditMenu);
+    view_dispatcher_remove_view(app->view_dispatcher, UrViewIdNameInput);
     view_dispatcher_remove_view(app->view_dispatcher, UrViewIdMain);
+    view_dispatcher_remove_view(app->view_dispatcher, UrViewIdRemoteList);
 
     submenu_free(app->signal_menu);
     submenu_free(app->kind_menu);
     submenu_free(app->edit_menu);
+    text_input_free(app->name_input);
     view_free(app->main_view);
+    submenu_free(app->remote_list_menu);
     view_dispatcher_free(app->view_dispatcher);
 
     furi_record_close(RECORD_DIALOGS);
@@ -601,13 +1003,9 @@ static void app_free(UrApp* app) {
     scratch_names_clear(app);
     furi_string_free(app->scratch_path);
 
-    for(size_t i = 0; i < UrButtonCount; i++) {
-        furi_string_free(app->edit_config->bindings[i].path);
-        furi_string_free(app->edit_config->bindings[i].name);
-    }
-    free(app->edit_config);
-
-    ur_config_free(app->config);
+    if(app->remotes) ur_remotes_free(app->remotes);
+    if(app->config) ur_config_free(app->config);
+    ur_config_free(app->edit_config);
     free(app);
 }
 
@@ -616,9 +1014,13 @@ int32_t universal_remote_app(void* p) {
     FURI_LOG_I(TAG, "starting");
 
     ur_tx_init();
-    UrApp* app = app_alloc();
 
-    switch_view(app, UrViewIdMain);
+    // One-shot migration: legacy config.txt → remotes/default.urcfg.
+    ur_remotes_migrate_if_needed();
+
+    UrApp* app = app_alloc();
+    refresh_remote_list(app);
+    switch_view(app, UrViewIdRemoteList);
     view_dispatcher_run(app->view_dispatcher);
 
     app_free(app);
