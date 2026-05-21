@@ -1,8 +1,10 @@
 # Flipper Application Manifest (FAM) for the "Universal Remote" app.
 #
-# Hotkey-style universal remote: each Flipper hardware button can be mapped
-# to either a Sub-GHz `.sub` file or a named IR signal from an `.ir` file.
-# Mappings live in /ext/apps_data/universal_remote/config.txt.
+# Multi-remote app: each profile maps the six hardware buttons (UP/DOWN/LEFT/
+# RIGHT/OK/BACK) to a saved Sub-GHz `.sub` file or a named IR signal from an
+# `.ir` file. The four directional buttons additionally support an
+# independently-mappable long-press binding. Profiles live as one file per
+# remote in /ext/apps_data/universal_remote/remotes/<name>.urcfg.
 #
 # `appid` doubles as the .fap filename and must match the folder name
 # (after kebab→snake normalisation: universal-remote → universal_remote).
@@ -14,8 +16,9 @@ App(
     requires=["gui", "storage"],
     stack_size=8 * 1024,
     fap_category="Tools",
+    fap_icon="icon.png",
     fap_author="Momentum App Framework",
-    fap_version="0.1",
-    fap_description="Map Sub-GHz and Infrared signals onto Flipper hardware buttons via a config file.",
+    fap_version="0.2",
+    fap_description="Multi-profile universal remote with short and long-press bindings for Sub-GHz and Infrared signals.",
     fap_weburl="https://github.com/Ranzlappen/Flipper",
 )

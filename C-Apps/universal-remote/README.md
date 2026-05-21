@@ -1,40 +1,69 @@
 # Universal Remote
 
-Map every Flipper hardware button to a saved Sub-GHz `.sub` file or a named
-signal from an Infrared `.ir` file. All six buttons (UP / DOWN / LEFT / RIGHT
-/ OK / BACK) are mappable.
+Multi-profile remote control for the Flipper Zero. Each *remote* is a saved
+profile that maps the six hardware buttons (UP / DOWN / LEFT / RIGHT / OK /
+BACK) to a saved Sub-GHz `.sub` file or a named signal from an Infrared `.ir`
+file. The four directional buttons additionally support a separately-mappable
+**long-press** binding.
+
+You can keep as many remotes as you like and switch between them from a
+single menu — e.g. one for the garage, one for the awning, one for the TV.
 
 ## Gestures
 
 | Gesture | Effect |
 |---|---|
-| Short press (any button) | Fire the binding for that button |
-| **Hold OK** | Open the on-device editor |
-| **Hold BACK** | Exit the app |
+| Short press UP / DOWN / LEFT / RIGHT | Fire that direction's SHORT binding |
+| **Long press UP / DOWN / LEFT / RIGHT** | Fire that direction's LONG binding |
+| Short press OK | Fire OK's binding |
+| Short press BACK | Return to the remote list |
+| **Hold OK** | Open the editor for the current remote |
+| **Hold BACK** | Return to the remote list (same as short-BACK from the D-pad view) |
 
-Short-press BACK fires its binding just like the other buttons — only the
-long-press exits.
+From the remote list, short-BACK exits the app. The list also contains a
+`[+ New remote]` entry; selecting it opens a name prompt and creates an empty
+profile.
 
-> **Note:** hold-BACK only exits from the **main view**. Inside the editor
-> (any submenu), short-BACK saves and returns you to the main view; from
-> there, hold-BACK exits the app. This is a Flipper submenu limitation —
-> long-press doesn't propagate to the navigation handler — not a bug.
+## Remote view
+
+The active remote's view shows the four D-pad bindings (both short and long)
+in a compact two-column layout, the OK and BACK bindings underneath, and a
+status line at the bottom that reports the last press:
+
+```
+┌──────────────────────────────────────────┐
+│ Garage Door                              │
+├──────────────────────────────────────────┤
+│  ▲  S: open        L: full               │
+│  ▼  S: close       L: -                  │
+│  ◀  S: -           L: light_toggle       │
+│  ▶  S: tv_vol      L: -                  │
+├──────────────────────────────────────────┤
+│ OK: stop          BACK: -                │
+│ last: UP long  OK                        │
+└──────────────────────────────────────────┘
+```
 
 ## On-device editor
 
-Hold OK from the main view. You'll see a submenu of all six buttons with
-their current bindings:
+Hold OK from a remote view. The editor lists every mappable slot:
 
 ```
-UP:   SG garage_open.sub
-DOWN: IR tv.ir/Vol_dn
-LEFT: -
+UP short:   SG garage_open.sub
+UP long:    SG garage_full.sub
+DOWN short: SG garage_close.sub
+DOWN long:  -
+LEFT short: …
 …
-[Save & exit]
-[Discard & exit]
+OK:         IR tv.ir/Power
+BACK:       -
+Rename remote
+Delete remote
+Save & exit
+Discard & exit
 ```
 
-Selecting a button asks for the action kind:
+Selecting a binding slot asks for the action kind:
 
 - **Sub-GHz file (.sub)** — opens the Sub-GHz file browser at `/ext/subghz`.
   Pick a file; the binding is updated.
@@ -43,11 +72,9 @@ Selecting a button asks for the action kind:
   chosen file. Pick a signal; the binding is updated.
 - **Clear binding** — removes the binding entirely.
 
-Short-press BACK from the edit root menu saves changes and exits the
-editor. Use **Discard & exit** if you want to abandon the session.
-
-Saving rewrites `/ext/apps_data/universal_remote/config.txt`. Hand-written
-comments in that file are not preserved across saves.
+**Rename** and **Delete** operate on the on-disk file; deleting prompts for
+confirmation. Short-BACK from the edit root saves changes and exits. Use
+**Discard & exit** if you want to abandon the session.
 
 ## Install
 
@@ -59,37 +86,52 @@ then copy `universal_remote.fap` to your SD card:
 /ext/apps/Tools/universal_remote.fap
 ```
 
-## Manual config (optional)
-
-The editor covers the common case. If you'd rather edit the file directly,
-the format is:
+## Storage layout
 
 ```
-BUTTON=KIND:PATH[,SIGNAL_NAME]
+/ext/apps_data/universal_remote/
+  remotes/
+    Default.urcfg
+    Garage.urcfg
+    …
+  config.txt.bak     (only present if the pre-0.2 single-config was migrated)
 ```
 
-- `BUTTON` — `UP`, `DOWN`, `LEFT`, `RIGHT`, `OK`, or `BACK`
-- `KIND` — `subghz` or `ir`
-- `PATH` — absolute SD path to a `.sub` or `.ir` file
-- `SIGNAL_NAME` — required for `ir`; the name of the signal inside the
-  `.ir` file (as it appears in the stock Infrared app's remote)
+On first run after upgrading from 0.1, the app auto-migrates the old
+single-profile `config.txt` into `remotes/Default.urcfg` and renames the
+original to `config.txt.bak` so you can recover from it if needed.
 
-Empty value (`UP=`) means "unbound." Lines starting with `#` are ignored.
-
-### Example
+## File format (`<name>.urcfg`)
 
 ```
-UP=subghz:/ext/subghz/garage_open.sub
-DOWN=subghz:/ext/subghz/garage_close.sub
-LEFT=ir:/ext/infrared/tv.ir,Vol_dn
-RIGHT=ir:/ext/infrared/tv.ir,Vol_up
+NAME=Garage Door
+UP_SHORT=subghz:/ext/subghz/garage_open.sub
+UP_LONG=subghz:/ext/subghz/garage_full.sub
+DOWN_SHORT=subghz:/ext/subghz/garage_close.sub
+DOWN_LONG=
+LEFT_SHORT=ir:/ext/infrared/tv.ir,Vol_dn
+LEFT_LONG=
+RIGHT_SHORT=ir:/ext/infrared/tv.ir,Vol_up
+RIGHT_LONG=
 OK=ir:/ext/infrared/tv.ir,Power
-BACK=subghz:/ext/subghz/garage_stop.sub
+BACK=
 ```
+
+- `NAME` — the display name shown in the remote list and titlebar (defaults
+  to the filename without the `.urcfg` extension if missing).
+- `<BUTTON>_SHORT` / `<BUTTON>_LONG` — D-pad bindings. For backwards
+  compatibility, a bare `UP=…` (no suffix) is read as `UP_SHORT=…`.
+- `OK` / `BACK` — short-press only. Long-OK opens the editor; long-BACK
+  returns to the list.
+- `KIND` is either `subghz` or `ir`.
+- For `ir`, the value is `PATH,SIGNAL_NAME` — both required.
+- Empty value (`UP_LONG=`) means "unbound."
+- Lines starting with `#` are ignored. Comments are *not* preserved across
+  on-device edits.
 
 ## Recording the signals
 
-You need to capture the signals with Flipper's built-in apps first:
+Capture the signals with Flipper's built-in apps first:
 
 - **Sub-GHz** — `Sub-GHz → Read → press your remote → Save`. The file lands
   in `/ext/subghz/<name>.sub`.
@@ -99,10 +141,8 @@ You need to capture the signals with Flipper's built-in apps first:
 
 ## Limits & gotchas
 
-- **Short-press only.** Long-press is reserved for OK (edit) and BACK
-  (exit). Long-press dispatch on other buttons is a future enhancement.
-- **The first 32 signals** in an `.ir` file are shown in the signal
-  picker. Files with more signals fall back to manual config editing.
+- **The first 64 signals** in an `.ir` file are shown in the signal picker.
+  Files with more signals fall back to manual config editing.
 - **Keeloq protocols** need the firmware-shipped keystore at
   `/ext/subghz/assets/keeloq_mfcodes`. Stock Momentum installs include it;
   the app loads it automatically.
@@ -110,15 +150,18 @@ You need to capture the signals with Flipper's built-in apps first:
   refuses to transmit, check `Settings → Sub-GHz → Region`.
 - **The app blocks during transmission** (typically tens of ms to a couple
   of seconds for long Sub-GHz frames). The status line at the bottom of
-  the main view shows `TX…` / `OK` / `FAILED` / `unbound`.
+  the remote view shows the last press and its outcome.
 
 ## Source layout
 
 ```
 universal-remote/
   application.fam                  FAM manifest (appid=universal_remote)
-  universal_remote.c               Entry point + main view + edit submenus
-  universal_remote_config.{c,h}    config.txt parser + serializer
+  icon.png                         10×10 1-bit launcher icon
+  universal_remote.c               Entry point + remote list + D-pad view +
+                                   edit submenus
+  universal_remote_config.{c,h}    .urcfg parser, multi-remote index,
+                                   migration of pre-0.2 config.txt
   universal_remote_transmit.{c,h}  Sub-GHz + IR transmitters
   README.md
 ```
