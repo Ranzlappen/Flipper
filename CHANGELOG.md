@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/Ranzlappen/Flipper/compare/v0.1.9...v0.1.10) (2026-05-22)
+
+
+### Features
+
+* **universal-remote:** multi-profile remotes with D-pad hold bindings ([#30](https://github.com/Ranzlappen/Flipper/issues/30)) ([9f3887a](https://github.com/Ranzlappen/Flipper/commit/9f3887aff60034375cd9bbe298e3dbba01c43f67))
+
 ## [0.1.9](https://github.com/Ranzlappen/Flipper/compare/v0.1.8...v0.1.9) (2026-05-21)
 
 
