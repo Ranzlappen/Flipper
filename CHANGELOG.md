@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/Ranzlappen/Flipper/compare/v0.1.10...v0.1.11) (2026-05-23)
+
+
+### Documentation
+
+* **gui-tool:** integrate Flipper GUI Studio ([#33](https://github.com/Ranzlappen/Flipper/issues/33)) ([71d2b2c](https://github.com/Ranzlappen/Flipper/commit/71d2b2c74ce9e44df03a4ebbd49180b4a4d4717f))
+
 ## [0.1.10](https://github.com/Ranzlappen/Flipper/compare/v0.1.9...v0.1.10) (2026-05-22)
 
 
