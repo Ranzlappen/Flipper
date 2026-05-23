@@ -105,6 +105,18 @@ The compiled `.fap` will be at `dist/hello_world.fap`. Copy it to your Flipper a
 
 For more details, see [`C-Apps/ufbt-config.md`](C-Apps/ufbt-config.md).
 
+### Design a GUI visually (optional)
+
+Prefer not to hand-write `Canvas` draw calls? **[Flipper GUI Studio](https://tools.ranzlappen.com/tools/flipper-gui/)** is a browser-based visual editor for the 128×64 screen. Drag widgets, wire buttons to screens, and export a **build-ready C app** that unzips straight into `C-Apps/<your-app>/` and builds with `ufbt`:
+
+1. Design your screens and fill in **App settings** (name, namespace, category, launcher icon).
+2. Export the **C app** bundle and unzip it into `C-Apps/`.
+3. `cd C-Apps/<your-app> && ufbt`.
+
+The generated `application.fam` already passes this repo's `npm run validate`. See [`docs/gui-tool-integration.md`](docs/gui-tool-integration.md) for the full walkthrough, and [`C-Apps/templates/gui-studio/`](C-Apps/templates/gui-studio) for an example of the exact output.
+
+> The tool's *Preview* export is a browser canvas preview only — not a deployable script. Pixel GUI designs map to the **C** path; the JS path uses view factories instead (see [`docs/JS-API-Reference.md`](docs/JS-API-Reference.md)).
+
 ---
 
 ## Folder Structure
@@ -127,13 +139,15 @@ momentum-app-framework/
 ├── C-Apps/                         <- Native .fap apps (advanced)
 │   ├── ufbt-config.md
 │   └── templates/
-│       └── hello-world/
-│           ├── application.fam
-│           ├── hello_world.c
-│           └── README.md
+│       ├── hello-world/            <- minimal hand-written skeleton
+│       │   ├── application.fam
+│       │   ├── hello_world.c
+│       │   └── README.md
+│       └── gui-studio/             <- example Flipper GUI Studio export
 ├── docs/
 │   ├── JS-API-Reference.md
-│   └── deployment.md
+│   ├── deployment.md
+│   └── gui-tool-integration.md     <- visual GUI builder workflow
 └── .github/workflows/
     ├── ci.yml                      <- PR sanity gate: prettier, typecheck, validate, build
     ├── release-please.yml          <- Conventional-commit driven version + CHANGELOG PR

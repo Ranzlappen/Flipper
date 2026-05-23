@@ -95,7 +95,7 @@ Most Flipper Zeros use the F7 target. uFBT picks this up automatically from the 
 
 ## 6. CI / GitHub Actions
 
-This repo's `.github/workflows/build-and-release.yml` already invokes `ufbt` against the Momentum index URL on every push to `main`. See that file for a working CI reference.
+This repo's `.github/workflows/ci.yml` builds every non-template `application.fam` with `ufbt` against the Momentum index URL on each pull request, and `.github/workflows/release-artifacts.yml` rebuilds them and attaches the `.fap` files to each GitHub Release. See those files for a working CI reference.
 
 ---
 
