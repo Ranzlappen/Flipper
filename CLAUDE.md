@@ -104,6 +104,14 @@ moved. CI re-runs against the new pin. Review and merge.
 - New C app? Folder name kebab-case is fine; `appid` must be snake-case (it
   becomes the `.fap` filename). `entry_point` must be a real symbol in one
   of the `.c` files in the folder. `validate.mjs` checks both.
+- GUI-heavy C app? Scaffold it visually with [Flipper GUI
+  Studio](https://tools.ranzlappen.com/tools/flipper-gui/). Its **C app**
+  export unzips into `C-Apps/<app>/` and already satisfies `validate.mjs`.
+  Treat the generated `<ns>_scene.c/.h` as build output — regenerate from
+  the design's JSON spec rather than hand-editing — and put app logic in the
+  `<ns>_on_event()` override in `<appid>.c`. See
+  `docs/gui-tool-integration.md` and the `C-Apps/templates/gui-studio/`
+  example.
 - Commit prefix matters — see `CONTRIBUTING.md`. A `feat:` commit triggers a
   minor bump; everything you want in the changelog needs the right prefix.
 
