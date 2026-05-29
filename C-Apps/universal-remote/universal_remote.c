@@ -353,20 +353,54 @@ static const UrButton main_row_btn[6] = {
 // FontKeyboard baselines for each row (8px pitch), per the Studio layout.
 static const uint8_t main_row_y[6] = {19, 27, 35, 43, 51, 59};
 
+// Side-scroll `text` within `width` px at baseline (x, y) using the current
+// font. Uses only long-standing core canvas calls (canvas_string_width +
+// canvas_draw_str) — deliberately NOT elements_scrollable_text_line, which
+// older firmware (e.g. the user's mntm-012) may not export to FAPs, making the
+// app fail to load. Static when the text fits; a character-stepped marquee
+// (advanced by `tick`) when it overflows. The drawn window is always trimmed
+// to the column, so it never spills into the neighbour.
+static void
+    draw_scroll_text(Canvas* canvas, int x, int y, int width, const char* text, uint32_t tick) {
+    if(!text || !text[0]) return;
+    if(canvas_string_width(canvas, text) <= (uint16_t)width) {
+        canvas_draw_str(canvas, x, y, text);
+        return;
+    }
+    // Cap the source so "src   src" always fits buf (guards against huge names),
+    // then scroll seamlessly through it one character at a time.
+    char src[UR_LABEL_BUF];
+    snprintf(src, sizeof(src), "%s", text);
+    char buf[2 * UR_LABEL_BUF + 4];
+    snprintf(buf, sizeof(buf), "%s   %s", src, src);
+    size_t period = strlen(src) + 3;
+    const char* win = buf + ((tick / 3) % period);
+
+    // Grow a window that still fits the column, then draw it.
+    char out[UR_LABEL_BUF];
+    size_t n = 0;
+    while(win[n] && n < sizeof(out) - 1) {
+        out[n] = win[n];
+        out[n + 1] = '\0';
+        if(canvas_string_width(canvas, out) > (uint16_t)width) {
+            out[n] = '\0';
+            break;
+        }
+        n++;
+    }
+    canvas_draw_str(canvas, x, y, out);
+}
+
 static void view_draw_callback(Canvas* canvas, void* model) {
     UrApp* app = *(UrApp**)model;
-    const size_t scroll = app->scroll_tick;
+    const uint32_t scroll = app->scroll_tick;
     canvas_clear(canvas);
-
-    // Reused across every label so we don't churn allocations each frame.
-    FuriString* s = furi_string_alloc();
 
     // ----- Top row: title (left) + status (right), both side-scroll -----
     const char* title = app->config ? furi_string_get_cstr(app->config->display_name) :
                                       "Universal Remote";
     canvas_set_font(canvas, FontPrimary);
-    furi_string_set_str(s, title);
-    elements_scrollable_text_line(canvas, 2, 9, 63, s, scroll, false);
+    draw_scroll_text(canvas, 2, 9, 63, title, scroll);
 
     char status[40];
     if(app->config && app->last_pressed < UrButtonCount && app->status != UrStatusIdle) {
@@ -382,8 +416,7 @@ static void view_draw_callback(Canvas* canvas, void* model) {
         snprintf(status, sizeof(status), "hold OK=edit  hold BACK=list");
     }
     canvas_set_font(canvas, FontSecondary);
-    furi_string_set_str(s, status);
-    elements_scrollable_text_line(canvas, 70, 9, 57, s, scroll, false);
+    draw_scroll_text(canvas, 70, 9, 57, status, scroll);
 
     canvas_draw_line(canvas, 0, 10, 127, 10);
 
@@ -391,7 +424,6 @@ static void view_draw_callback(Canvas* canvas, void* model) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 2, 30, "No remote loaded.");
         canvas_draw_str(canvas, 2, 40, "Press BACK to pick one.");
-        furi_string_free(s);
         return;
     }
 
@@ -408,15 +440,11 @@ static void view_draw_callback(Canvas* canvas, void* model) {
         uint8_t y = main_row_y[r];
 
         binding_short_label(&app->config->bindings[b][UrGestureShort], label, sizeof(label));
-        furi_string_set_str(s, label);
-        elements_scrollable_text_line(canvas, 9, y, 57, s, scroll, false);
+        draw_scroll_text(canvas, 9, y, 57, label, scroll);
 
         binding_short_label(&app->config->bindings[b][UrGestureLong], label, sizeof(label));
-        furi_string_set_str(s, label);
-        elements_scrollable_text_line(canvas, 69, y, 58, s, scroll, false);
+        draw_scroll_text(canvas, 69, y, 58, label, scroll);
     }
-
-    furi_string_free(s);
 }
 
 static UrButton input_key_to_button(InputKey key) {
