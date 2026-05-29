@@ -53,12 +53,19 @@ Open **Export**, set the bundle target to **C app**, and click
 
 ```
 <your-app>/
-├── application.fam      manifest (appid, entry_point, category, icon)
-├── <appid>.c            entry point + <ns>_on_event() override
-├── <ns>_scene.c         generated drawing + input handling
-├── <ns>_scene.h         screen enum, model struct, public API
-└── icon.png             10×10 1-bit launcher icon
+├── application.fam            manifest (appid, entry_point, category, icon)
+├── <appid>.c                  entry point + <ns>_on_event() override
+├── <ns>_scene.c               generated drawing + input handling
+├── <ns>_scene.h               screen enum, model struct, public API
+├── <appid>.flipper-gui.json   the design spec — source of truth, re-editable
+└── icon.png                   10×10 1-bit launcher icon
 ```
+
+The `*.flipper-gui.json` sidecar is what makes the app **round-trippable**:
+it's the canonical `flipper-gui/v1` design, and `application.fam` +
+`<ns>_scene.{c,h}` are regenerated from it. Commit it alongside the rest —
+[`regen-check`](#editing-later) enforces that the committed C never drifts
+from it.
 
 ### 4. Drop into the repo and build
 
@@ -82,10 +89,13 @@ The generated `application.fam` already satisfies this repo's checks
 `<appid>.c`). Confirm with:
 
 ```bash
-cd JS-Apps && npm run validate
+cd JS-Apps
+npm run validate      # FAM identifiers + the *.flipper-gui.json sidecar
+npm run regen-check   # the committed C matches its flipper-gui spec, byte-for-byte
 ```
 
-`ci.yml` then builds the app automatically on your pull request.
+`ci.yml` then runs both checks and builds the app automatically on your
+pull request.
 
 ---
 
@@ -110,10 +120,30 @@ model struct via `<ns>_scene_model(scene)`.
 
 ## Editing later
 
-`<ns>_scene.c` / `.h` are **generated** — don't hand-edit them. Instead,
-keep the design's JSON spec (Export → JSON, or the shareable URL),
-re-import it into the tool, change it, and re-export. Hand-written code
-belongs only in `<appid>.c`.
+The committed **`<appid>.flipper-gui.json`** is the source of truth. To
+change the GUI, open it back up in the tool — **Export → Load JSON**, pick
+the committed sidecar — edit visually, and re-export over the folder.
+`application.fam` and `<ns>_scene.{c,h}` are **generated**, so don't
+hand-edit them; the only file meant for hand-editing is `<appid>.c` (your
+`<ns>_on_event()` logic), which a re-export leaves untouched.
+
+`npm run regen-check` keeps the two in lockstep: it re-runs the real Studio
+exporters on the committed spec and byte-compares the result against the
+committed `application.fam` + `<ns>_scene.{c,h}` (the entry `<appid>.c` and
+assets are excluded). If they ever diverge — a stray hand-edit, a stale
+spec — CI fails. Regenerate locally with:
+
+```bash
+cd JS-Apps && npm run regen-check -- --write
+```
+
+This is the **bi-directional** contract: a design flows
+Studio → `C-Apps/` as the C bundle, and `C-Apps/` → Studio via the
+committed JSON. (Re-deriving the editor design from raw `.c` is *not*
+supported — always round-trip through the JSON.) The exporters used by
+`regen-check` are a pinned snapshot under
+[`JS-Apps/vendor/flipper-gui/`](../JS-Apps/vendor/flipper-gui/SOURCE.md);
+bump them when the tool's emitters change.
 
 ## Architecture notes
 

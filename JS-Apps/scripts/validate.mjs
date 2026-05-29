@@ -180,6 +180,42 @@ async function validateFam(file) {
       warn(file, `entry_point "${entry}" not defined in any .c file in ${folder}/`);
     }
   }
+  await validateStudioSidecar(file);
+}
+
+// Flipper GUI Studio apps carry a `*.flipper-gui.json` spec (schema
+// "flipper-gui/v1") so they round-trip back into the editor. This is the
+// fast first gate: a Studio app must have a parseable, correctly-schema'd
+// sidecar. Deep "does the C match the spec" verification is regen-check.mjs.
+async function validateStudioSidecar(file) {
+  const appdir = dirname(file);
+  const fam = await readFile(file, "utf8");
+  const sidecars = (await readdir(appdir)).filter((n) => n.endsWith(".flipper-gui.json"));
+  const weburl = famField(fam, "fap_weburl") || "";
+  const looksLikeStudio = weburl.includes("flipper-gui");
+
+  if (!sidecars.length) {
+    if (looksLikeStudio) {
+      warn(
+        file,
+        `looks like a Flipper GUI Studio app (fap_weburl) but has no *.flipper-gui.json spec — the editor round-trip needs it (Export → JSON next to application.fam)`,
+      );
+    }
+    return;
+  }
+  for (const name of sidecars) {
+    const sidecar = join(appdir, name);
+    let parsed;
+    try {
+      parsed = JSON.parse(await readFile(sidecar, "utf8"));
+    } catch (e) {
+      warn(sidecar, `flipper-gui spec is not valid JSON: ${e.message}`);
+      continue;
+    }
+    if (parsed?.schema !== "flipper-gui/v1") {
+      warn(sidecar, `flipper-gui spec must declare "schema": "flipper-gui/v1"`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

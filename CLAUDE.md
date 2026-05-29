@@ -107,11 +107,16 @@ moved. CI re-runs against the new pin. Review and merge.
 - GUI-heavy C app? Scaffold it visually with [Flipper GUI
   Studio](https://tools.ranzlappen.com/tools/flipper-gui/). Its **C app**
   export unzips into `C-Apps/<app>/` and already satisfies `validate.mjs`.
-  Treat the generated `<ns>_scene.c/.h` as build output — regenerate from
-  the design's JSON spec rather than hand-editing — and put app logic in the
-  `<ns>_on_event()` override in `<appid>.c`. See
-  `docs/gui-tool-integration.md` and the `C-Apps/templates/gui-studio/`
-  example.
+  Commit the `<appid>.flipper-gui.json` spec alongside the C — it's the
+  source of truth and what makes the app re-editable (round-trip via **Load
+  JSON**, never by parsing the `.c`). Treat `<ns>_scene.c/.h` and
+  `application.fam` as build output regenerated from that spec; `npm run
+  regen-check` (CI-enforced) byte-checks they're in sync, and
+  `npm run regen-check -- --write` regenerates them. Put hand-written logic
+  only in the `<ns>_on_event()` override in `<appid>.c` (excluded from the
+  regen diff). The exporters used by the check are a pinned snapshot under
+  `JS-Apps/vendor/flipper-gui/`. See `docs/gui-tool-integration.md` and the
+  `C-Apps/templates/gui-studio/` example.
 - Commit prefix matters — see `CONTRIBUTING.md`. A `feat:` commit triggers a
   minor bump; everything you want in the changelog needs the right prefix.
 
@@ -123,3 +128,8 @@ moved. CI re-runs against the new pin. Review and merge.
 - Adding eslint/jest. The tooling is deliberately minimal because Flipper
   scripts run under mJS, not Node — most lint rules don't apply and most
   test frameworks can't load the SDK.
+- Hand-editing a Studio app's `<ns>_scene.c/.h` or `application.fam`, or
+  deleting its `<appid>.flipper-gui.json` (regen-check overwrites/fails —
+  edit the spec and regenerate instead).
+- Reformatting `JS-Apps/vendor/flipper-gui/` (it's a pinned upstream mirror,
+  prettier-ignored; fix upstream and re-vendor).

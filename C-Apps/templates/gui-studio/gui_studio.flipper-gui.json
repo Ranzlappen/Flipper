@@ -1,0 +1,116 @@
+{
+  "schema": "flipper-gui/v1",
+  "v": 1,
+  "app": {
+    "name": "GUI Studio",
+    "namespace": "gui_studio",
+    "category": "Examples",
+    "stackSize": 2,
+    "requires": [
+      "gui"
+    ],
+    "description": "Example app scaffolded by Flipper GUI Studio.",
+    "author": "Momentum App Framework",
+    "version": "1.0",
+    "weburl": "https://tools.ranzlappen.com/tools/flipper-gui/",
+    "iconMode": "png"
+  },
+  "screens": [
+    {
+      "id": "scr_main",
+      "name": "Main",
+      "widgets": [
+        {
+          "id": "w_title",
+          "type": "text",
+          "x": 4,
+          "y": 2,
+          "text": "GUI Studio",
+          "font": "primary",
+          "scroll": false,
+          "scrollW": 64
+        },
+        {
+          "id": "w_rule",
+          "type": "frame",
+          "x": 0,
+          "y": 13,
+          "w": 128,
+          "h": 1
+        },
+        {
+          "id": "w_hint",
+          "type": "text",
+          "x": 4,
+          "y": 22,
+          "text": "OK menu  Back exit",
+          "font": "secondary",
+          "scroll": false,
+          "scrollW": 64
+        },
+        {
+          "id": "w_menu_btn",
+          "type": "button",
+          "x": 34,
+          "y": 48,
+          "w": 60,
+          "h": 12,
+          "label": "Menu",
+          "key": "ok",
+          "event": "short",
+          "style": "framed",
+          "font": "secondary",
+          "scroll": false,
+          "action": {
+            "kind": "goto",
+            "target": "scr_menu"
+          }
+        }
+      ]
+    },
+    {
+      "id": "scr_menu",
+      "name": "Menu",
+      "widgets": [
+        {
+          "id": "w_settings",
+          "type": "text",
+          "x": 4,
+          "y": 2,
+          "text": "Settings",
+          "font": "primary",
+          "scroll": false,
+          "scrollW": 64
+        },
+        {
+          "id": "w_menu",
+          "type": "menu",
+          "x": 4,
+          "y": 14,
+          "w": 120,
+          "lineH": 10,
+          "selectedVar": "var:menu_cursor",
+          "font": "primary",
+          "scroll": false,
+          "items": [
+            {
+              "label": "Beep (event 1)",
+              "action": {
+                "kind": "custom_event",
+                "code": 1
+              }
+            },
+            {
+              "label": "Back to main",
+              "action": {
+                "kind": "goto",
+                "target": "scr_main"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "icons": []
+}
