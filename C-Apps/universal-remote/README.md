@@ -26,22 +26,24 @@ profile.
 
 ## Remote view
 
-The active remote's view shows the four D-pad bindings (both short and long)
-in a compact two-column layout, the OK and BACK bindings underneath, and a
-status line at the bottom that reports the last press:
+The active remote's view is a two-column map of all six buttons. The title
+sits top-left and a status readout (the last press and its result, or the
+hold-gesture hints) sits top-right. Each row carries a button glyph
+(↑ ↓ ← → ◉ ↻) with its SHORT-press binding in the left column and its
+LONG-press binding on the right — OK and BACK have no long binding, so theirs
+show `-`. The title and every label side-scroll when they overflow.
 
 ```
-┌──────────────────────────────────────────┐
-│ Garage Door                              │
-├──────────────────────────────────────────┤
-│  ▲  S: open        L: full               │
-│  ▼  S: close       L: -                  │
-│  ◀  S: -           L: light_toggle       │
-│  ▶  S: tv_vol      L: -                  │
-├──────────────────────────────────────────┤
-│ OK: stop          BACK: -                │
-│ last: UP long  OK                        │
-└──────────────────────────────────────────┘
+┌────────────────────────┬─────────────────────┐
+│ Garage Door            │  last: UP long  OK   │
+├──────────────────────┬─┴─────────────────────┤
+│ ↑ open               │ full                   │
+│ ↓ close              │ -                      │
+│ ← -                  │ light_toggle           │
+│ → tv_vol             │ -                      │
+│ ◉ stop               │ -                      │
+│ ↻ -                  │ -                      │
+└──────────────────────┴────────────────────────┘
 ```
 
 ## On-device editor
@@ -150,8 +152,8 @@ Capture the signals with Flipper's built-in apps first:
 - **Frequency legality** depends on your region setting — if a `.sub`
   refuses to transmit, check `Settings → Sub-GHz → Region`.
 - **The app blocks during transmission** (typically tens of ms to a couple
-  of seconds for long Sub-GHz frames). The status line at the bottom of
-  the remote view shows the last press and its outcome.
+  of seconds for long Sub-GHz frames). The top-right status readout on the
+  remote view shows the last press and its outcome.
 
 ## Source layout
 
@@ -159,7 +161,7 @@ Capture the signals with Flipper's built-in apps first:
 universal-remote/
   application.fam                  FAM manifest (appid=universal_remote)
   icon.png                         10×10 1-bit launcher icon
-  universal_remote.c               Entry point + remote list + D-pad view +
+  universal_remote.c               Entry point + remote list + remote view +
                                    edit submenus
   universal_remote_config.{c,h}    .urcfg parser, multi-remote index,
                                    migration of pre-0.2 config.txt
