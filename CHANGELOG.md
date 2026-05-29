@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.13](https://github.com/Ranzlappen/Flipper/compare/v0.1.12...v0.1.13) (2026-05-29)
+
+
+### Features
+
+* **gui-studio:** make C apps round-trippable with Flipper GUI Studio ([#38](https://github.com/Ranzlappen/Flipper/issues/38)) ([885dcbc](https://github.com/Ranzlappen/Flipper/commit/885dcbc5a78c58ddb9163b1196d33b56d71949fe))
+
 ## [0.1.12](https://github.com/Ranzlappen/Flipper/compare/v0.1.11...v0.1.12) (2026-05-29)
 
 
