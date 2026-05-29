@@ -16,9 +16,9 @@ single menu — e.g. one for the garage, one for the awning, one for the TV.
 | Short press UP / DOWN / LEFT / RIGHT | Fire that direction's SHORT binding |
 | **Long press UP / DOWN / LEFT / RIGHT** | Fire that direction's LONG binding |
 | Short press OK | Fire OK's binding |
-| Short press BACK | Return to the remote list |
+| Short press BACK | Fire BACK's binding (returns to the remote list if BACK is unbound) |
 | **Hold OK** | Open the editor for the current remote |
-| **Hold BACK** | Return to the remote list (same as short-BACK from the D-pad view) |
+| **Hold BACK** | Return to the remote list |
 
 From the remote list, short-BACK exits the app. The list also contains a
 `[+ New remote]` entry; selecting it opens a name prompt and creates an empty
@@ -121,8 +121,9 @@ BACK=
   to the filename without the `.urcfg` extension if missing).
 - `<BUTTON>_SHORT` / `<BUTTON>_LONG` — D-pad bindings. For backwards
   compatibility, a bare `UP=…` (no suffix) is read as `UP_SHORT=…`.
-- `OK` / `BACK` — short-press only. Long-OK opens the editor; long-BACK
-  returns to the list.
+- `OK` / `BACK` — short-press only. Short-OK / short-BACK fire their bindings;
+  hold-OK opens the editor and hold-BACK returns to the list. (When `BACK` is
+  empty, short-BACK falls back to returning to the list.)
 - `KIND` is either `subghz` or `ir`.
 - For `ir`, the value is `PATH,SIGNAL_NAME` — both required.
 - Empty value (`UP_LONG=`) means "unbound."

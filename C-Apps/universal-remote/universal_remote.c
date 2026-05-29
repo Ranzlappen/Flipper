@@ -403,7 +403,7 @@ static void view_draw_callback(Canvas* canvas, void* model) {
             gname,
             status_text(app->status));
     } else {
-        snprintf(footer, sizeof(footer), "hold OK=edit  BACK=list");
+        snprintf(footer, sizeof(footer), "hold OK=edit  hold BACK=list");
     }
     canvas_draw_str(canvas, 2, 63, footer);
 }
@@ -440,6 +440,7 @@ static bool view_input_callback(InputEvent* event, void* context) {
             return true;
         }
         if(event->key == InputKeyBack) {
+            // Hold-BACK is the dedicated "return to remote list" gesture.
             view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventBackToList);
             return true;
         }
@@ -459,8 +460,20 @@ static bool view_input_callback(InputEvent* event, void* context) {
     if(b >= UrButtonCount) return false;
 
     if(b == UrButtonBack) {
-        // Short-BACK returns to the list (same as long-BACK).
-        view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventBackToList);
+        // Short-BACK fires the BACK binding (if any); hold-BACK is the dedicated
+        // "return to list" gesture. When BACK is unbound we keep short-BACK as
+        // navigation so the user is never stuck on the remote view.
+        const UrBinding* bind =
+            app->config ? &app->config->bindings[UrButtonBack][UrGestureShort] : NULL;
+        bool bound = bind && bind->kind != UrActionNone && !furi_string_empty(bind->path);
+        if(bound) {
+            app->last_pressed = b;
+            app->last_gesture = UrGestureShort;
+            view_dispatcher_send_custom_event(
+                app->view_dispatcher, dispatch_event(b, UrGestureShort));
+        } else {
+            view_dispatcher_send_custom_event(app->view_dispatcher, UrCustomEventBackToList);
+        }
         return true;
     }
 
