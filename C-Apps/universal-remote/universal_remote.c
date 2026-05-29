@@ -8,7 +8,9 @@
 //     - Picking a remote opens its D-pad view.
 //     - BACK exits the app.
 //
-//   D-pad view (per-remote):
+//   Remote view (per-remote): a two-column map of all six buttons. Each row
+//   carries a button glyph (↑↓←→◉↻) with its SHORT-press binding on the left
+//   and LONG-press binding on the right; the title and every label side-scroll.
 //     - Short-press UP/DOWN/LEFT/RIGHT   → fire that direction's SHORT binding.
 //     - Long-press  UP/DOWN/LEFT/RIGHT   → fire that direction's LONG binding.
 //     - Short-press OK / BACK            → fire OK / BACK binding (short-only).
@@ -127,6 +129,10 @@ typedef struct {
     UrStatus status;
     UrButton last_pressed;
     UrGesture last_gesture;
+
+    // Main-view side-scroll animation (drives elements_scrollable_text_line).
+    FuriTimer* scroll_timer;
+    uint32_t scroll_tick;
 } UrApp;
 
 // 10 editor slots, in display order. Indexed by UrEditItemBindingsBase..+9.
@@ -300,112 +306,117 @@ static void open_remote(UrApp* app, size_t index) {
 // Main view (custom canvas)
 // --------------------------------------------------------------------------
 
-// Draw a small filled arrow at (cx, cy) pointing in `dir`. Box is 7×7.
-static void draw_arrow(Canvas* canvas, int cx, int cy, char dir) {
-    // Filled triangle via three rows / columns.
-    switch(dir) {
-    case 'U':
-        canvas_draw_line(canvas, cx, cy - 3, cx, cy + 3);
-        canvas_draw_line(canvas, cx - 1, cy - 2, cx + 1, cy - 2);
-        canvas_draw_line(canvas, cx - 2, cy - 1, cx + 2, cy - 1);
-        break;
-    case 'D':
-        canvas_draw_line(canvas, cx, cy - 3, cx, cy + 3);
-        canvas_draw_line(canvas, cx - 1, cy + 2, cx + 1, cy + 2);
-        canvas_draw_line(canvas, cx - 2, cy + 1, cx + 2, cy + 1);
-        break;
-    case 'L':
-        canvas_draw_line(canvas, cx - 3, cy, cx + 3, cy);
-        canvas_draw_line(canvas, cx - 2, cy - 1, cx - 2, cy + 1);
-        canvas_draw_line(canvas, cx - 1, cy - 2, cx - 1, cy + 2);
-        break;
-    case 'R':
-        canvas_draw_line(canvas, cx - 3, cy, cx + 3, cy);
-        canvas_draw_line(canvas, cx + 2, cy - 1, cx + 2, cy + 1);
-        canvas_draw_line(canvas, cx + 1, cy - 2, cx + 1, cy + 2);
-        break;
-    default:
-        break;
-    }
-}
+// Per-row button glyph column (↑ ↓ ← → ◉ ↻), 67×47 at (1,12). This is the
+// free-draw layer exported verbatim from Flipper GUI Studio — drawn with the
+// same canvas_draw_xbm() call the tool emits, so it's pixel-identical to the
+// editor preview. The six glyphs line up top→bottom with main_row_btn below.
+#define UR_GLYPHS_W 67
+#define UR_GLYPHS_H 47
+static const uint8_t remote_glyph_column[] = {
+    0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x3e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2d, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x2d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1c, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+// The six rows, top→bottom, matching the glyph column above.
+static const UrButton main_row_btn[6] = {
+    UrButtonUp,
+    UrButtonDown,
+    UrButtonLeft,
+    UrButtonRight,
+    UrButtonOk,
+    UrButtonBack,
+};
+// FontKeyboard baselines for each row (8px pitch), per the Studio layout.
+static const uint8_t main_row_y[6] = {19, 27, 35, 43, 51, 59};
 
 static void view_draw_callback(Canvas* canvas, void* model) {
     UrApp* app = *(UrApp**)model;
+    const size_t scroll = app->scroll_tick;
     canvas_clear(canvas);
 
-    // ----- Title bar -----
+    // Reused across every label so we don't churn allocations each frame.
+    FuriString* s = furi_string_alloc();
+
+    // ----- Top row: title (left) + status (right), both side-scroll -----
     const char* title = app->config ? furi_string_get_cstr(app->config->display_name) :
                                       "Universal Remote";
     canvas_set_font(canvas, FontPrimary);
-    char title_buf[28];
-    snprintf(title_buf, sizeof(title_buf), "%s", title);
-    if(strlen(title_buf) > 21) {
-        title_buf[20] = 0xE2; // unused; will be overwritten
-        title_buf[20] = '.';
-        title_buf[21] = '\0';
-    }
-    canvas_draw_str(canvas, 2, 9, title_buf);
-    canvas_draw_line(canvas, 0, 11, 128, 11);
+    furi_string_set_str(s, title);
+    elements_scrollable_text_line(canvas, 2, 9, 63, s, scroll, false);
 
-    if(!app->config) {
-        canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 2, 25, "No remote loaded.");
-        canvas_draw_str(canvas, 2, 35, "Press BACK to pick one.");
-        return;
-    }
-
-    // ----- D-pad rows -----
-    // Each direction shows: [arrow]  short  /  long  (compact)
-    canvas_set_font(canvas, FontSecondary);
-    static const char* row_dir = "UDLR";
-    static const UrButton row_btn[4] = {UrButtonUp, UrButtonDown, UrButtonLeft, UrButtonRight};
-    static const int row_y[4] = {20, 28, 36, 44};
-
-    char buf_short[16];
-    char buf_long[16];
-    char line[40];
-    for(size_t r = 0; r < 4; r++) {
-        draw_arrow(canvas, 6, row_y[r] - 2, row_dir[r]);
-
-        binding_short_label(
-            &app->config->bindings[row_btn[r]][UrGestureShort], buf_short, sizeof(buf_short));
-        binding_short_label(
-            &app->config->bindings[row_btn[r]][UrGestureLong], buf_long, sizeof(buf_long));
-
-        // "S:open / L:full" — truncate each side to keep total ~21 chars
-        // (5px font ~= 25 cols on a 128px screen).
-        if(strlen(buf_short) > 9) buf_short[9] = '\0';
-        if(strlen(buf_long) > 9) buf_long[9] = '\0';
-        snprintf(line, sizeof(line), "S:%-9s L:%s", buf_short, buf_long);
-        canvas_draw_str(canvas, 14, row_y[r], line);
-    }
-
-    // ----- OK / BACK row -----
-    canvas_draw_line(canvas, 0, 47, 128, 47);
-    binding_short_label(
-        &app->config->bindings[UrButtonOk][UrGestureShort], buf_short, sizeof(buf_short));
-    binding_short_label(
-        &app->config->bindings[UrButtonBack][UrGestureShort], buf_long, sizeof(buf_long));
-    if(strlen(buf_short) > 9) buf_short[9] = '\0';
-    if(strlen(buf_long) > 9) buf_long[9] = '\0';
-    snprintf(line, sizeof(line), "OK:%-9s BACK:%s", buf_short, buf_long);
-    canvas_draw_str(canvas, 2, 55, line);
-
-    // ----- Footer / status -----
-    char footer[40];
-    if(app->last_pressed < UrButtonCount && app->status != UrStatusIdle) {
+    char status[40];
+    if(app->config && app->last_pressed < UrButtonCount && app->status != UrStatusIdle) {
         const char* gname = (app->last_gesture == UrGestureLong) ? "long" : "short";
         snprintf(
-            footer,
-            sizeof(footer),
-            "last: %s %s  %s",
+            status,
+            sizeof(status),
+            "last: %s %s %s",
             ur_button_to_name(app->last_pressed),
             gname,
             status_text(app->status));
     } else {
-        snprintf(footer, sizeof(footer), "hold OK=edit  hold BACK=list");
+        snprintf(status, sizeof(status), "hold OK=edit  hold BACK=list");
     }
-    canvas_draw_str(canvas, 2, 63, footer);
+    canvas_set_font(canvas, FontSecondary);
+    furi_string_set_str(s, status);
+    elements_scrollable_text_line(canvas, 70, 9, 57, s, scroll, false);
+
+    canvas_draw_line(canvas, 0, 10, 127, 10);
+
+    if(!app->config) {
+        canvas_set_font(canvas, FontSecondary);
+        canvas_draw_str(canvas, 2, 30, "No remote loaded.");
+        canvas_draw_str(canvas, 2, 40, "Press BACK to pick one.");
+        furi_string_free(s);
+        return;
+    }
+
+    // ----- Glyph column (verbatim Studio free-draw) + column divider -----
+    canvas_draw_xbm(canvas, 1, 12, UR_GLYPHS_W, UR_GLYPHS_H, remote_glyph_column);
+    canvas_draw_line(canvas, 67, 11, 67, 63);
+
+    // ----- 6 rows × 2 columns: left = SHORT label, right = LONG label -----
+    // OK/BACK have no long binding, so their right cell shows "-".
+    canvas_set_font(canvas, FontKeyboard);
+    char label[UR_LABEL_BUF];
+    for(size_t r = 0; r < 6; r++) {
+        UrButton b = main_row_btn[r];
+        uint8_t y = main_row_y[r];
+
+        binding_short_label(&app->config->bindings[b][UrGestureShort], label, sizeof(label));
+        furi_string_set_str(s, label);
+        elements_scrollable_text_line(canvas, 9, y, 57, s, scroll, false);
+
+        binding_short_label(&app->config->bindings[b][UrGestureLong], label, sizeof(label));
+        furi_string_set_str(s, label);
+        elements_scrollable_text_line(canvas, 69, y, 58, s, scroll, false);
+    }
+
+    furi_string_free(s);
 }
 
 static UrButton input_key_to_button(InputKey key) {
@@ -929,6 +940,27 @@ static bool navigation_event_callback(void* context) {
 // App lifecycle
 // --------------------------------------------------------------------------
 
+// Periodic tick that advances the side-scroll offset and repaints the remote
+// view. Runs on the timer thread; bumping the counter and committing the
+// locking view model (the `true` flag) to request a redraw is safe from there.
+// Only runs while the main view is on screen (see enter/exit below).
+static void scroll_timer_cb(void* ctx) {
+    UrApp* app = ctx;
+    app->scroll_tick++;
+    with_view_model(app->main_view, UrApp ** m, { *m = app; }, true);
+}
+
+static void main_view_enter(void* ctx) {
+    UrApp* app = ctx;
+    app->scroll_tick = 0;
+    furi_timer_start(app->scroll_timer, furi_ms_to_ticks(120));
+}
+
+static void main_view_exit(void* ctx) {
+    UrApp* app = ctx;
+    furi_timer_stop(app->scroll_timer);
+}
+
 static UrApp* app_alloc(void) {
     UrApp* app = malloc(sizeof(UrApp));
     app->config = NULL;
@@ -947,6 +979,8 @@ static UrApp* app_alloc(void) {
     app->name_buffer[0] = '\0';
     app->name_mode = UrNameModeCreate;
     app->current_view = UrViewIdRemoteList;
+    app->scroll_tick = 0;
+    app->scroll_timer = furi_timer_alloc(scroll_timer_cb, FuriTimerTypePeriodic, app);
 
     app->gui = furi_record_open(RECORD_GUI);
     app->notifications = furi_record_open(RECORD_NOTIFICATION);
@@ -962,6 +996,8 @@ static UrApp* app_alloc(void) {
     view_set_context(app->main_view, app);
     view_set_draw_callback(app->main_view, view_draw_callback);
     view_set_input_callback(app->main_view, view_input_callback);
+    view_set_enter_callback(app->main_view, main_view_enter);
+    view_set_exit_callback(app->main_view, main_view_exit);
 
     // Text input.
     app->name_input = text_input_alloc();
@@ -1000,6 +1036,9 @@ static void app_free(UrApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, UrViewIdNameInput);
     view_dispatcher_remove_view(app->view_dispatcher, UrViewIdMain);
     view_dispatcher_remove_view(app->view_dispatcher, UrViewIdRemoteList);
+
+    furi_timer_stop(app->scroll_timer);
+    furi_timer_free(app->scroll_timer);
 
     submenu_free(app->signal_menu);
     submenu_free(app->kind_menu);
