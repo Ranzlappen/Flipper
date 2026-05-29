@@ -16,7 +16,8 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # JS sanity: prettier, typecheck, validate (FAM + require allowlist), smoke.
+  # JS sanity: prettier, typecheck, validate (FAM + require allowlist),
+  # regen-check (C apps match their flipper-gui spec), smoke.
   # ---------------------------------------------------------------------------
   js:
     name: JS sanity
@@ -44,6 +45,9 @@ jobs:
 
       - name: Validate (FAM + SDK allowlist)
         run: npm run validate
+
+      - name: Regen check (C apps match their flipper-gui spec)
+        run: npm run regen-check
 
       - name: Smoke run
         run: npm run smoke

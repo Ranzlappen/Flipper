@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "prettier --check \"**/*.{js,ts,json,md}\" && tsc --noEmit",
     "validate": "node ./scripts/validate.mjs",
+    "regen-check": "node ./scripts/regen-check.mjs",
     "smoke": "node ./scripts/smoke.mjs",
     "format": "prettier --write \"**/*.{js,ts,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,ts,json,md}\"",

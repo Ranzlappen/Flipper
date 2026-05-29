@@ -1,0 +1,4 @@
+# Vendored snapshot of the Flipper GUI Studio exporters (ranzlappen-tools,
+# tools/flipper-gui/). Kept byte-identical to upstream so regen-check.mjs
+# regenerates committed C apps exactly — do not reformat. See vendor/flipper-gui/SOURCE.md.
+vendor/

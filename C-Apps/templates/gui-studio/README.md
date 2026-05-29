@@ -10,17 +10,24 @@ excluded from release builds.
 
 ```
 gui-studio/
-├── application.fam      manifest (appid "gui_studio", entry "gui_studio_app")
-├── gui_studio.c         entry point + the gui_studio_on_event() override
-├── gui_studio_scene.c   generated screens: drawing + input handling
-├── gui_studio_scene.h   screen enum, model struct, public API, on_event decl
-└── icon.png             10x10 1-bit launcher icon
+├── application.fam              manifest (appid "gui_studio", entry "gui_studio_app")
+├── gui_studio.c                 entry point + the gui_studio_on_event() override
+├── gui_studio_scene.c           generated screens: drawing + input handling
+├── gui_studio_scene.h           screen enum, model struct, public API, on_event decl
+├── gui_studio.flipper-gui.json  the design spec — source of truth, re-editable
+└── icon.png                     10x10 1-bit launcher icon
 ```
 
 This example has two screens — a **Main** screen with a button that
 navigates to a **Menu** screen, whose menu items fire a custom event
 (`gui_studio_on_event(1, …)`) and navigate back. It demonstrates screen
 navigation, the menu cursor model field, and the custom-event hook.
+
+It's also the repo's **round-trip reference**: `application.fam` and
+`gui_studio_scene.{c,h}` are regenerated from
+`gui_studio.flipper-gui.json` by `npm run regen-check` (run from
+`JS-Apps/`), which CI runs to guarantee the committed C never drifts from
+the spec.
 
 ## Build
 
@@ -34,10 +41,12 @@ Deploy `dist/gui_studio.fap` to `/ext/apps/Examples/` on your Flipper.
 
 ## Editing
 
-Don't hand-edit `gui_studio_scene.c` — it's generated. Instead re-import
-your design's JSON spec into Flipper GUI Studio, change it there, and
-re-export. The one file meant for hand-editing is `gui_studio.c`: put your
-app logic inside `gui_studio_on_event()`.
+Don't hand-edit `gui_studio_scene.{c,h}` or `application.fam` — they're
+generated. Instead open `gui_studio.flipper-gui.json` in Flipper GUI Studio
+(**Export → Load JSON**), change it there, and re-export over this folder;
+then regenerate with `npm run regen-check -- --write` from `JS-Apps/`. The
+one file meant for hand-editing is `gui_studio.c`: put your app logic inside
+`gui_studio_on_event()` (a re-export leaves it untouched).
 
 See [`docs/gui-tool-integration.md`](../../../docs/gui-tool-integration.md)
 for the full workflow.

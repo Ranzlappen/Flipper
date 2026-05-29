@@ -35,7 +35,7 @@ static void draw_screen_main(Canvas* canvas, GuiStudioModel* state) {
     canvas_set_font(canvas, FontSecondary);
     canvas_draw_str(canvas, 4, 28, "OK menu  Back exit");
     canvas_draw_frame(canvas, 34, 48, 60, 12);
-    canvas_draw_str(canvas, 54, 56, "Menu");
+    canvas_draw_str(canvas, 52, 56, "Menu");
 }
 
 static void draw_screen_menu(Canvas* canvas, GuiStudioModel* state) {

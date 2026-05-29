@@ -99,10 +99,23 @@ jobs:
           if [ -d JS-Apps/examples  ]; then cp -v JS-Apps/examples/*.js  artifacts/js/ 2>/dev/null || true; fi
           ls -la artifacts/js || true
 
+      - name: Collect Flipper GUI Studio specs
+        run: |
+          set -euo pipefail
+          # Ship each built C app's *.flipper-gui.json spec so published apps
+          # stay re-editable: Load JSON back into Flipper GUI Studio to round-trip.
+          mkdir -p artifacts/specs
+          mapfile -t specs < <(find C-Apps -type f -name '*.flipper-gui.json' \
+            -not -path 'C-Apps/templates/*' | sort)
+          for spec in "${specs[@]}"; do
+            cp -v "$spec" artifacts/specs/
+          done
+          echo "Collected $(ls artifacts/specs 2>/dev/null | wc -l) spec(s)"
+
       - name: Create release bundle zip
         run: |
           cd artifacts
-          zip -r momentum-app-framework-bundle.zip fap js
+          zip -r momentum-app-framework-bundle.zip fap js specs
           ls -la
 
       - name: Attach artifacts to release
@@ -112,6 +125,7 @@ jobs:
           files: |
             artifacts/fap/*.fap
             artifacts/js/*.js
+            artifacts/specs/*.flipper-gui.json
             artifacts/momentum-app-framework-bundle.zip
           fail_on_unmatched_files: false
         env:
