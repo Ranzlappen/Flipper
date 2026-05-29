@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/Ranzlappen/Flipper/compare/v0.1.11...v0.1.12) (2026-05-29)
+
+
+### Bug Fixes
+
+* **universal-remote:** distinguish short-BACK (transmit) from hold-BACK (return to list) ([#36](https://github.com/Ranzlappen/Flipper/issues/36)) ([a049f22](https://github.com/Ranzlappen/Flipper/commit/a049f2286a50bcfd0b0c64fa8f26d143384e4be9))
+
 ## [0.1.11](https://github.com/Ranzlappen/Flipper/compare/v0.1.10...v0.1.11) (2026-05-23)
 
 
