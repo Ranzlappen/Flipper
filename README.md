@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icons/logo-256.png" width="128" height="128" alt="Momentum App Framework logo">
+</p>
+
 # Momentum App Framework
 
 [![CI](https://github.com/Ranzlappen/Flipper/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Ranzlappen/Flipper/actions/workflows/ci.yml)

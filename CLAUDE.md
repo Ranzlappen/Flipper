@@ -29,6 +29,10 @@ JS-Apps/
 C-Apps/
   templates/         hello-world skeleton; excluded from release builds
   <appid>/           production app: application.fam + <appid>.c + README
+icons/               repo brand logo (logo-512/256/128.png, README only —
+                     the dolphin "icon universe" mark; the 10×10 1-bit
+                     per-app icon.png glyphs stay app-specific, not derived
+                     from it)
 .github/workflows/   ci.yml, release-please.yml, release-artifacts.yml,
                      momentum-sync.yml, labeler.yml, automerge.yml
 .momentum-sdk-version  Single source of truth for UFBT_CHANNEL + JS_SDK
