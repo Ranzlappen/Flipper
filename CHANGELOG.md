@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.14](https://github.com/Ranzlappen/Flipper/compare/v0.1.13...v0.1.14) (2026-06-04)
+
+
+### Documentation
+
+* add repo brand logo from the shared icon universe ([#44](https://github.com/Ranzlappen/Flipper/issues/44)) ([1a73c07](https://github.com/Ranzlappen/Flipper/commit/1a73c07a4a42365b07bac14bf32832d53e22a6af))
+
 ## [0.1.13](https://github.com/Ranzlappen/Flipper/compare/v0.1.12...v0.1.13) (2026-05-29)
 
 
