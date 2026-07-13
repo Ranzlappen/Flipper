@@ -29,8 +29,8 @@
     "@next-flip/fz-sdk-mntm": "1.0.0"
   },
   "devDependencies": {
-    "prettier": "^3.2.0",
-    "typescript": "^6.0.3"
+    "prettier": "^3.9.5",
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=18"
