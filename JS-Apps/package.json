@@ -26,7 +26,7 @@
   "author": "Momentum App Framework Contributors",
   "license": "MIT",
   "dependencies": {
-    "@next-flip/fz-sdk-mntm": "1.0.0"
+    "@next-flip/fz-sdk-mntm": "1.0.1"
   },
   "devDependencies": {
     "prettier": "^3.2.0",
